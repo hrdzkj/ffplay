@@ -376,6 +376,7 @@ int parse_option(void *optctx, const char *opt, const char *arg,
         return AVERROR(EINVAL);
     }
     if (po->flags & HAS_ARG && !arg) {
+
         av_log(NULL, AV_LOG_ERROR, "Missing argument for option '%s'\n", opt);
         return AVERROR(EINVAL);
     }
@@ -394,7 +395,8 @@ void parse_options(void *optctx, int argc, char **argv, const OptionDef *options
     int optindex, handleoptions = 1, ret;
 
     /* perform system-dependent conversions for arguments list */
-    prepare_app_arguments(&argc, &argv);
+	// 刘毅prepare_app_arguments里面的GetCommandLine重新从命令行获取参数，导致外面传入的参数无效。
+    //prepare_app_arguments(&argc, &argv);
 
     /* parse options */
     optindex = 1;
@@ -408,8 +410,11 @@ void parse_options(void *optctx, int argc, char **argv, const OptionDef *options
             }
             opt++;
 
-            if ((ret = parse_option(optctx, opt, argv[optindex], options)) < 0)
-                exit_program(1);
+			if ((ret = parse_option(optctx, opt, argv[optindex], options)) < 0) {
+				while (1) {
+				}
+				exit_program(1);
+			}
             optindex += ret;
         } else {
             if (parse_arg_function)

@@ -9,4 +9,6 @@ https://github.com/zhuyinglong/ffplay
     注意：
         项目中所使用的库都是32位版本的，已配置WIN32的DEBUG工程属性，若编译release版本可能需要自己配置。
 		
-
+ffplay使用opengl参考  
+http://ffmpeg.org/pipermail/ffmpeg-devel/2013-March/140814.html
+https://github.com/chowg1762/Android_ffplay

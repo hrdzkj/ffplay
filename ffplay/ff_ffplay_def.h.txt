@@ -1,0 +1,12 @@
+/* ffplayer */
+typedef struct FFPlayer {
+   // liuyi 新增录像用到字段
+    AVFormatContext *m_ofmt_ctx;        // 用于输出的AVFormatContext结构体
+    AVOutputFormat *m_ofmt;
+    pthread_mutex_t record_mutex;       // 锁
+    int is_record;                      // 是否在录制             
+    int record_error;    
+    int is_first;                       // 第一帧数据
+    int64_t start_pts;                  // 开始录制时pts
+    int64_t start_dts;                  // 开始录制时dts 
+}

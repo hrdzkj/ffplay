@@ -158,6 +158,9 @@
     <ClInclude Include="cmdutils_common_opts.h" />
     <ClInclude Include="config.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="symbol.c" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
