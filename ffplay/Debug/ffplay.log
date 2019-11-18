@@ -1,44 +1,65 @@
-﻿生成启动时间为 2019/6/9 8:56:00。
-     1>项目“C:\Data\code\ffplay\ffplay\ffplay.vcxproj”在节点 2 上(Build 个目标)。
-     1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /sdl- /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TC /analyze- /errorReport:prompt ffplay.c
-         ffplay.c
-     1>c:\data\code\ffplay\ffplay\ffplay.c(598): warning C4996: 'avcodec_decode_video2': 被声明为已否决
-                 c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(4901) : 参见“avcodec_decode_video2”的声明
-     1>c:\data\code\ffplay\ffplay\ffplay.c(608): warning C4996: 'avcodec_decode_audio4': 被声明为已否决
-                 c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(4852) : 参见“avcodec_decode_audio4”的声明
-     1>c:\data\code\ffplay\ffplay\ffplay.c(841): warning C4244: “=”: 从“double”转换到“float”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(926): warning C4018: “<”: 有符号/无符号不匹配
-     1>c:\data\code\ffplay\ffplay\ffplay.c(1016): warning C4244: “-=”: 从“int64_t”转换到“int”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(1101): warning C4244: “=”: 从“double”转换到“FFTSample”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(1115): warning C4244: “初始化”: 从“double”转换到“int”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(1117): warning C4244: “初始化”: 从“double”转换到“int”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(1139): warning C4018: “>=”: 有符号/无符号不匹配
-     1>c:\data\code\ffplay\ffplay\ffplay.c(1615): warning C4018: “<”: 有符号/无符号不匹配
-     1>c:\data\code\ffplay\ffplay\ffplay.c(2395): warning C4018: “>=”: 有符号/无符号不匹配
-     1>c:\data\code\ffplay\ffplay\ffplay.c(2517): warning C4018: “>=”: 有符号/无符号不匹配
-     1>c:\data\code\ffplay\ffplay\ffplay.c(2801): warning C4018: “<”: 有符号/无符号不匹配
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3176): warning C4244: “函数”: 从“int64_t”转换到“unsigned int”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3186): warning C4244: “初始化”: 从“double”转换到“int64_t”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3193): warning C4018: “<”: 有符号/无符号不匹配
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3203): warning C4018: “>=”: 有符号/无符号不匹配
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3309): warning C4244: “=”: 从“int64_t”转换到“double”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3311): warning C4244: “=”: 从“int64_t”转换到“double”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3313): warning C4244: “=”: 从“int64_t”转换到“double”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3319): warning C4244: “函数”: 从“double”转换到“int64_t”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3366): warning C4244: “函数”: 从“double”转换到“int64_t”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3371): warning C4244: “=”: 从“__int64”转换到“int”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3376): warning C4244: “=”: 从“double”转换到“int”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3383): warning C4244: “=”: 从“double”转换到“int64_t”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3420): warning C4244: “=”: 从“double”转换到“int”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3426): warning C4244: “=”: 从“double”转换到“int”，可能丢失数据
-     1>c:\data\code\ffplay\ffplay\ffplay.c(3566): warning C4090: “初始化”: 不同的“const”限定符
-       Link:
-         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Data\code\ffplay\Debug\ffplay.exe" /INCREMENTAL /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Data\code\ffplay\Debug\ffplay.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Data\code\ffplay\Debug\ffplay.lib" /MACHINE:X86 Debug\cmdutils.obj
-         Debug\ffplay.obj
-         ffplay.vcxproj -> C:\Data\code\ffplay\Debug\ffplay.exe
-     1>已完成生成项目“C:\Data\code\ffplay\ffplay\ffplay.vcxproj”(Build 个目标)的操作。
-
-生成成功。
-
-已用时间 00:00:03.99
+﻿  ffplay.c
+c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavutil\rational.h : warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
+c:\data\code\ffplay\ffplay\ffplay.c(448): warning C4018: “<”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(479): warning C4098: “encode”:“void”函数返回值
+c:\data\code\ffplay\ffplay\ffplay.c(496): warning C4013: “ffp_record_file”未定义；假设外部返回 int
+c:\data\code\ffplay\ffplay\ffplay.c(505): warning C4013: “ffp_stop_record”未定义；假设外部返回 int
+c:\data\code\ffplay\ffplay\ffplay.c(464): warning C4101: “got_frame”: 未引用的局部变量
+c:\data\code\ffplay\ffplay\ffplay.c(552): warning C4244: “函数”: 从“int64_t”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(553): warning C4244: “函数”: 从“int64_t”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(575): warning C4244: “=”: 从“int64_t”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(658): warning C4018: “<”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(721): warning C4996: 'avcodec_copy_context': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(4178) : 参见“avcodec_copy_context”的声明
+c:\data\code\ffplay\ffplay\ffplay.c(1006): warning C4996: 'av_codec_get_pkt_timebase': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(3324) : 参见“av_codec_get_pkt_timebase”的声明
+c:\data\code\ffplay\ffplay\ffplay.c(1264): warning C4244: “=”: 从“double”转换到“float”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(1381): warning C4018: “<”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(1469): warning C4244: “-=”: 从“int64_t”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(1558): warning C4244: “=”: 从“double”转换到“FFTSample”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(1572): warning C4244: “初始化”: 从“double”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(1574): warning C4244: “初始化”: 从“double”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(1596): warning C4018: “>=”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(1694): warning C4996: 'av_lockmgr_register': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(6103) : 参见“av_lockmgr_register”的声明
+c:\data\code\ffplay\ffplay\ffplay.c(2057): warning C4018: “<”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(2894): warning C4018: “>=”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(3018): warning C4018: “>=”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(3028): warning C4996: 'av_codec_set_pkt_timebase': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(3326) : 参见“av_codec_set_pkt_timebase”的声明
+c:\data\code\ffplay\ffplay\ffplay.c(3049): warning C4996: 'av_codec_get_max_lowres': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(3570) : 参见“av_codec_get_max_lowres”的声明
+c:\data\code\ffplay\ffplay\ffplay.c(3051): warning C4996: 'av_codec_get_max_lowres': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(3570) : 参见“av_codec_get_max_lowres”的声明
+c:\data\code\ffplay\ffplay\ffplay.c(3052): warning C4996: 'av_codec_get_max_lowres': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(3570) : 参见“av_codec_get_max_lowres”的声明
+c:\data\code\ffplay\ffplay\ffplay.c(3054): warning C4996: 'av_codec_set_lowres': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(3340) : 参见“av_codec_set_lowres”的声明
+c:\data\code\ffplay\ffplay\ffplay.c(3306): warning C4018: “<”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(3707): warning C4244: “函数”: 从“int64_t”转换到“unsigned int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3717): warning C4244: “初始化”: 从“double”转换到“int64_t”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3724): warning C4018: “<”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(3734): warning C4018: “>=”: 有符号/无符号不匹配
+c:\data\code\ffplay\ffplay\ffplay.c(3786): warning C4133: “函数”: 从“VideoState *”到“FFPlayer *”的类型不兼容
+c:\data\code\ffplay\ffplay\ffplay.c(3789): warning C4133: “函数”: 从“VideoState *”到“FFPlayer *”的类型不兼容
+c:\data\code\ffplay\ffplay\ffplay.c(3792): warning C4133: “函数”: 从“VideoState *”到“FFPlayer *”的类型不兼容
+c:\data\code\ffplay\ffplay\ffplay.c(3793): warning C4133: “函数”: 从“VideoState *”到“FFPlayer *”的类型不兼容
+c:\data\code\ffplay\ffplay\ffplay.c(3794): warning C4133: “函数”: 从“VideoState *”到“FFPlayer *”的类型不兼容
+c:\data\code\ffplay\ffplay\ffplay.c(3797): warning C4133: “函数”: 从“VideoState *”到“FFPlayer *”的类型不兼容
+c:\data\code\ffplay\ffplay\ffplay.c(3842): warning C4244: “=”: 从“int64_t”转换到“double”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3844): warning C4244: “=”: 从“int64_t”转换到“double”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3846): warning C4244: “=”: 从“int64_t”转换到“double”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3852): warning C4244: “函数”: 从“double”转换到“int64_t”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3902): warning C4244: “函数”: 从“double”转换到“int64_t”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3908): warning C4244: “=”: 从“__int64”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3913): warning C4244: “=”: 从“double”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3920): warning C4244: “=”: 从“double”转换到“int64_t”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3957): warning C4244: “=”: 从“double”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(3963): warning C4244: “=”: 从“double”转换到“int”，可能丢失数据
+c:\data\code\ffplay\ffplay\ffplay.c(4106): warning C4090: “初始化”: 不同的“const”限定符
+c:\data\code\ffplay\ffplay\ffplay.c(4196): warning C4013: “oldEntrence”未定义；假设外部返回 int
+c:\data\code\ffplay\ffplay\ffplay.c(4220): warning C4996: 'av_register_all': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavformat\avformat.h(2043) : 参见“av_register_all”的声明
+c:\data\code\ffplay\ffplay\ffplay.c(4270): warning C4996: 'av_lockmgr_register': 被声明为已否决
+          c:\data\code\ffplay\ffplay\thirdparty\ffmpeg\include\libavcodec\avcodec.h(6103) : 参见“av_lockmgr_register”的声明
+  ffplay.vcxproj -> C:\Data\code\ffplay\Debug\ffplay.exe

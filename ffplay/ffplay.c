@@ -467,81 +467,54 @@ static void encode(FFPlayer *ffp,AVCodecContext *enc_ctx, AVFrame *frame)
 	pkt.data = NULL;
 	pkt.size = 0;
 
-	
-	int stream_index=getMediaTypeStreamIndex(ffp,AVMEDIA_TYPE_VIDEO);
 	/* send the frame to the encoder */
 	if (frame)
 		printf("Send frame %3"PRId64"\n", frame->pts);
-
-
-   /*
-   //旧的api
-	ret= avcodec_encode_video2(enc_ctx, &pkt,frame, &got_frame);
-	if (ret < 0)
-		return ret;
-	if (!(got_frame)) {
-		fprintf(stderr, "avcodec_encode_video2 fail \n");
-		return ;
-	}	
-	ffp_record_file(ffp, &pkt);
-	av_packet_unref(&pkt);
-	*/
 	
+
 	//新的api
-	ret = avcodec_send_frame(enc_ctx, frame);
+	ret = avcodec_send_frame(enc_ctx, frame);//frame==null导致 bug 
 	if (ret < 0) {
-	fprintf(stderr, "Error sending a frame for encoding\n");
-	return -1;
+	  fprintf(stderr, "Error sending a frame for encoding %s \n", av_err2str(ret));
+	  return -1;
 	}
 
+	int stream_index = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
 	while (1) {
 		ret = avcodec_receive_packet(enc_ctx, &pkt);
-		if (ret) {
-			fprintf(stderr, "Error encoding ret= %d,%s \n", ret,av_err2str(ret));
-			break;
-		}
+		if (ret >= 0) {
+			fprintf(stdout, " -----> encoding success!\n");
+			pkt.stream_index = stream_index;
 
-		fprintf(stdout, " -----> encoding success!\n");
-		pkt.stream_index = stream_index;
-		ffp_record_file(ffp,&pkt);
-		av_packet_unref(&pkt);
+			/* prepare packet for muxing */
+			/*
+			av_packet_rescale_ts(&pkt,
+				enc_ctx->time_base,
+				ffp->m_ofmt_ctx->streams[stream_index]->time_base);
+           */
+
+			ffp_record_file(ffp, &pkt);
+			av_packet_unref(&pkt);
+		}else {
+			if (ret == AVERROR(EAGAIN)) {
+				break;
+			}else if (ret == AVERROR_EOF) {
+				fprintf(stdout, "Error encoding ret= %d,没有新的包可以被刷新%s \n", ret, av_err2str(ret));
+				//写文件尾部
+				if (ffp->is_record == 2) {
+					ffp_stop_record(ffp);
+				}
+				break;
+			}else  {
+				fprintf(stderr, "Error encoding ret= %d,%s \n", ret, av_err2str(ret)); \
+				break;
+			}
+		}
 	}
 	
 }
 
 
-static int encode_write_frame(FFPlayer *ffp, AVFrame *filt_frame, unsigned int stream_index, int *got_frame) {
-	int ret;
-	int got_frame_local;
-	AVPacket enc_pkt;
-
-	int(*enc_func)(AVCodecContext *, AVPacket *, const AVFrame *, int *) =
-		(ffp->m_ofmt_ctx->streams[stream_index]->codecpar->codec_type ==
-			AVMEDIA_TYPE_VIDEO) ? avcodec_encode_video2 : avcodec_encode_audio2;
-	if (!got_frame)
-		got_frame = &got_frame_local;
-	av_log(NULL, AV_LOG_INFO, "Encoding frame\n");
-	/* encode filtered frame */
-	enc_pkt.data = NULL;
-	enc_pkt.size = 0;
-	av_init_packet(&enc_pkt);
-	ret = enc_func(stream_ctx[stream_index].enc_ctx, &enc_pkt,
-		filt_frame, got_frame);
-	av_frame_free(&filt_frame);
-	if (ret < 0)
-		return ret;
-	if (!(*got_frame))
-		return 0;
-	/* prepare packet for muxing */
-	enc_pkt.stream_index = stream_index;
-	av_packet_rescale_ts(&enc_pkt,stream_ctx[stream_index].enc_ctx->time_base,
-		ffp->m_ofmt_ctx->streams[stream_index]->time_base);
-
-	av_log(NULL, AV_LOG_DEBUG, "Muxing frame\n");
-	/* mux encoded frame */
-	ret = av_interleaved_write_frame(ffp->m_ofmt_ctx, &enc_pkt);
-	return ret;
-}
 
 /**
 * 2.保存为视频文件
@@ -585,9 +558,6 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 		in_stream = is->ic->streams[pkt->stream_index];
 		out_stream = ffp->m_ofmt_ctx->streams[pkt->stream_index];
 	
-
-
-		
 		// 转换PTS/DTS		
 		pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
 		pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
@@ -595,7 +565,6 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 		pkt->pos = -1;
 		
 		// liuyi:max_ts 解决由于pts不递增，导致av_interleaved_write_frame -22的问题
-       //if (pkt->pts<=max_ts){ 
 		if (pkt->pts<0) {
 			av_log(NULL, AV_LOG_ERROR, "liuyi ffp_record_file max_ts=%d,pts=%d", max_ts, pkt->pts);
 			max_ts++;
@@ -622,26 +591,6 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 }
 
 
-static int flush_encoder(FFPlayer *ffp, unsigned int stream_index)
-{
-	int ret=0;
-	int got_frame;
-	if (!(stream_ctx[stream_index].enc_ctx->codec->capabilities &
-		AV_CODEC_CAP_DELAY))
-		return 0;	
-	while (1) {
-		ret = encode_write_frame(ffp, NULL, stream_index, &got_frame);
-		if (ret < 0) {
-			break;
-		}
-		if (!got_frame) {
-			ret = 0;
-			break;
-		}
-	
-	}
-	return ret;
-}
 
 
 int ffp_stop_record(FFPlayer *ffp)
@@ -649,9 +598,7 @@ int ffp_stop_record(FFPlayer *ffp)
 	VideoState *is = ffp->is;
 	if (ffp->is_record) {
 		ffp->is_record = 0;
-		for (int i = 0; i < is->ic->nb_streams; i++) {
-			// flush_encoder(ffp, i);
-		} 
+ 
 		if (ffp->m_ofmt_ctx != NULL) {
 			av_write_trailer(ffp->m_ofmt_ctx);
 			if (ffp->m_ofmt_ctx && !(ffp->m_ofmt_ctx->oformat->flags & AVFMT_NOFILE)) {
@@ -661,10 +608,10 @@ int ffp_stop_record(FFPlayer *ffp)
 			ffp->m_ofmt_ctx = NULL;
 			ffp->is_first = 0;
 		}
-		av_log(ffp, AV_LOG_DEBUG, "stopRecord ok\n");
+		av_log(NULL, AV_LOG_WARNING, "写文件尾部成功 ok\n");
 	}
 	else {
-		av_log(ffp, AV_LOG_ERROR, "don't need stopRecord\n");
+		av_log(ffp, AV_LOG_ERROR, "不需要写文件尾部\n");
 	}
 	
 	return 0;
@@ -743,38 +690,28 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 			printf("Failed to copy context input to output stream codec context\n");
 			goto end;
 		}
-		
+		// 参考http://ffmpeg.org/doxygen/3.4/transcoding_8c-example.html
 		if (enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
-			//enc_ctx->height = dec_ctx->height;
-			//enc_ctx->width = dec_ctx->width;
-			//enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
+			enc_ctx->height = dec_ctx->height;
+			enc_ctx->width = dec_ctx->width;
+			enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
 			//enc_ctx->gop_size = 10;
 			//enc_ctx->max_b_frames = 0;
 
-			//if (encoder->pix_fmts)
+			if (encoder->pix_fmts)
 				enc_ctx->pix_fmt = encoder->pix_fmts[0];
-			//else
-			//	enc_ctx->pix_fmt = dec_ctx->pix_fmt;
+			else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
 
-			enc_ctx->time_base = av_inv_q(dec_ctx->framerate);
-			
-			//enc_ctx->time_base = //(AVRational) { 1, 30 };
-			//enc_ctx->framerate = //(AVRational) { 30, 1 };
-			
+			enc_ctx->time_base = av_inv_q(dec_ctx->framerate);	
 		}
 		else {
-			//enc_ctx->sample_rate = dec_ctx->sample_rate;
-			//enc_ctx->channel_layout = dec_ctx->channel_layout;
-			//enc_ctx->channels = av_get_channel_layout_nb_channels(enc_ctx->channel_layout);
-			//enc_ctx->sample_fmt = encoder->sample_fmts[0];
-			enc_ctx->time_base = (AVRational) { 1, dec_ctx->sample_rate };
+			enc_ctx->sample_rate = dec_ctx->sample_rate;
+			enc_ctx->channel_layout = dec_ctx->channel_layout;
+			enc_ctx->channels = av_get_channel_layout_nb_channels(enc_ctx->channel_layout);
+			enc_ctx->sample_fmt = encoder->sample_fmts[0];
+			enc_ctx->time_base = (AVRational) { 1, enc_ctx->sample_rate };
 		}
 		
-
-		if (ffp->m_ofmt_ctx->flags & AVFMT_GLOBALHEADER) {
-			enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-		}
-
 		ret = avcodec_open2(enc_ctx, encoder, NULL);
 		if (ret < 0) {
 			av_log(NULL, AV_LOG_ERROR, "Cannot open video encoder for stream #%u\n", i);
@@ -782,8 +719,11 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 		}
 
 		ret = avcodec_copy_context(out_stream->codec, in_stream->codec);
-		 //ret = avcodec_parameters_to_context(out_stream->codec, in_stream->codecpar);
-		//ret = avcodec_parameters_from_context(out_stream->codecpar, enc_ctx);
+
+		if (ffp->m_ofmt_ctx->flags & AVFMT_GLOBALHEADER) {
+			enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+		}
+
 		if (ret < 0) {
 			av_log(NULL, AV_LOG_ERROR, "Failed to copy encoder parameters to output stream #%u\n", i);
 			goto end;
@@ -813,8 +753,8 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 
 
 	ffp->is_first = 0;
-	ffp->is_record = 1;
 	ffp->record_error = 0;
+	ffp->is_record = 1;
 	
 	return 0;
 end:
@@ -2617,10 +2557,22 @@ static int video_thread(void *arg)
 
 	for (;;) {
 		ret = get_video_frame(ffp, frame);
-		if (ret < 0)
+		if (ret < 0) {
 			goto the_end;
-		if (!ret)
+		}
+
+		if (!ret) {
+			// liuyi add begin
+			if (ffp->is_record == -1) {//还有很多可能是线程间引起的问题
+				ffp->is_record = 2;//设置开始停止录像标志
+				int stream_index = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
+				encode(ffp, stream_ctx[stream_index].enc_ctx, NULL);
+			}
+			// liuyi add end
+
 			continue;
+		}
+			
 
 #if CONFIG_AVFILTER
 		if (last_w != frame->width
@@ -2681,14 +2633,10 @@ static int video_thread(void *arg)
 
 			// liuyi  code begin
 			int streamIndex = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
-			if (ffp->is_record == 1) { //在录像，且录制了关键帧，
+			if (ffp->is_record == 1) { //在录像
 				encode(ffp, stream_ctx[streamIndex].enc_ctx, frame);//直接录制原始帧				
 			}
 
-			if (ffp->is_record == 2) { //flush the encoder
-				encode(ffp, stream_ctx[streamIndex].enc_ctx, NULL);
-				ffp_stop_record(ffp);
-			}
 			/* 证明了AVFrame的拷贝是正常的
 			AVFrame *copyFrame = deep_copy_frame(frame);
 			ret = queue_picture(is, copyFrame, pts, duration, copyFrame->pkt_pos, is->viddec.pkt_serial);
@@ -3521,12 +3469,11 @@ static int read_thread(void *arg)
 		ret = av_read_frame(ic, pkt);
 		if (ret < 0) {
 			if ((ret == AVERROR_EOF || avio_feof(ic->pb)) && !is->eof) {
-				// liuyi add
-				if (ffp->is_record==1) {
-					ffp->is_record = 2;//设置开始停止录像标志
-					//ffp_stop_record(ffp);
+				// liuyi add  
+				if (ffp->is_record == 1) {
+					ffp->is_record = -1;
 				}
-			
+
 				if (is->video_stream >= 0)
 					packet_queue_put_nullpacket(&is->videoq, is->video_stream);
 				if (is->audio_stream >= 0)
@@ -4244,6 +4191,8 @@ int main(int argc, char **argv) {
 		"800",
 		"test.mp4",
 	};
+
+
 	oldEntrence(6, &paras);
 
 
@@ -4283,7 +4232,6 @@ int oldEntrence(int argc, char **argv)
 	//input_filename = "test.mp4";
 	//input_filename = "rtsp://admin:admin@10.13.27.7:554";
 	/*end for vs2015*/
-	printf("argc is %d\n", argc);
 	for (int i = 0; i < argc; i++) {
 		printf("Argument %d is %s\n", i, argv[i]);
 	}
