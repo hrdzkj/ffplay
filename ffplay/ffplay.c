@@ -554,15 +554,20 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 		}
 		
 
-
 		in_stream = is->ic->streams[pkt->stream_index];
 		out_stream = ffp->m_ofmt_ctx->streams[pkt->stream_index];
 	
-		// 转换PTS/DTS		
+		// 转换PTS/DTS av_rescale_rnd(a,b,c) 以"时钟基c"表示的数值a转换成以"时钟基b"来表示。	
+		//av_rescale_q= This function is equivalent to av_rescale_q_rnd() with AV_ROUND_NEAR_INF.
 		pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
 		pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
 		pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
 		pkt->pos = -1;
+
+		//pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base, out_stream->codec->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+		//pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base, out_stream->codec->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+		//pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->codec->time_base);
+		//pkt->pos = -1;
 		
 		// liuyi:max_ts 解决由于pts不递增，导致av_interleaved_write_frame -22的问题
 		if (pkt->pts<0) {
@@ -3470,9 +3475,14 @@ static int read_thread(void *arg)
 		if (ret < 0) {
 			if ((ret == AVERROR_EOF || avio_feof(ic->pb)) && !is->eof) {
 				// liuyi add  
+				/*不在本read_thread里面进行flush编码器和写文件尾部;
+				  时为了防止与video_thread里面的写帧产生冲突，
+				  所以设置录像结束标志，统一在read_thread进行flush编码器和写文件尾部
+				*/
 				if (ffp->is_record == 1) {
 					ffp->is_record = -1;
 				}
+				//liuyi end
 
 				if (is->video_stream >= 0)
 					packet_queue_put_nullpacket(&is->videoq, is->video_stream);
