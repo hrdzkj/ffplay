@@ -458,7 +458,7 @@ static int getMediaTypeStreamIndex(FFPlayer *ffp, enum AVMediaType mediaType)
 
 
 
-static void encode(FFPlayer *ffp,AVCodecContext *enc_ctx, AVFrame *frame)
+static void encode(FFPlayer *ffp, AVCodecContext *enc_ctx, AVFrame *frame)
 {
 	int ret;
 	int got_frame;// malloc(sizeof(int));
@@ -470,13 +470,13 @@ static void encode(FFPlayer *ffp,AVCodecContext *enc_ctx, AVFrame *frame)
 	/* send the frame to the encoder */
 	if (frame)
 		printf("Send frame %3"PRId64"\n", frame->pts);
-	
+
 
 	//新的api
 	ret = avcodec_send_frame(enc_ctx, frame);//frame==null导致 bug 
 	if (ret < 0) {
-	  fprintf(stderr, "Error sending a frame for encoding %s \n", av_err2str(ret));
-	  return -1;
+		fprintf(stderr, "Error sending a frame for encoding %s \n", av_err2str(ret));
+		return -1;
 	}
 
 	int stream_index = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
@@ -489,29 +489,32 @@ static void encode(FFPlayer *ffp,AVCodecContext *enc_ctx, AVFrame *frame)
 			/* prepare packet for muxing */
 			/*
 			av_packet_rescale_ts(&pkt,
-				enc_ctx->time_base,
-				ffp->m_ofmt_ctx->streams[stream_index]->time_base);
-           */
+			enc_ctx->time_base,
+			ffp->m_ofmt_ctx->streams[stream_index]->time_base);
+			*/
 
 			ffp_record_file(ffp, &pkt);
 			av_packet_unref(&pkt);
-		}else {
+		}
+		else {
 			if (ret == AVERROR(EAGAIN)) {
 				break;
-			}else if (ret == AVERROR_EOF) {
+			}
+			else if (ret == AVERROR_EOF) {
 				fprintf(stdout, "Error encoding ret= %d,没有新的包可以被刷新%s \n", ret, av_err2str(ret));
 				//写文件尾部
 				if (ffp->is_record == 2) {
 					ffp_stop_record(ffp);
 				}
 				break;
-			}else  {
+			}
+			else {
 				fprintf(stderr, "Error encoding ret= %d,%s \n", ret, av_err2str(ret)); \
-				break;
+					break;
 			}
 		}
 	}
-	
+
 }
 
 
@@ -538,9 +541,9 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 	AVPacket *pkt = (AVPacket *)av_malloc(sizeof(AVPacket)); // 与看直播的 AVPacket分开，不然卡屏
 	av_new_packet(pkt, 0);
 	if (0 == av_packet_ref(pkt, packet)) {
-		
-		if (ffp->is_first) { // 录制的第一帧，时间从0开始
-			max_ts = 0;		
+		//看好pts，dts是相对什么的
+		if (ffp->is_first) { // 录制的第一帧，时间从0开始 
+			max_ts = 0;
 			ffp->start_pts = pkt->pts;
 			ffp->start_dts = pkt->dts;
 
@@ -549,26 +552,26 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 			ffp->is_first = 1;
 		}
 		else { // 之后的每一帧都要减去，点击开始录制时的值，这样的时间才是正确的
-		  pkt->pts = abs(pkt->pts - ffp->start_pts);
-		  pkt->dts = abs(pkt->dts - ffp->start_dts);
+			pkt->pts = abs(pkt->pts - ffp->start_pts);
+			pkt->dts = abs(pkt->dts - ffp->start_dts);
 		}
-		
+
 
 		in_stream = is->ic->streams[pkt->stream_index];
 		out_stream = ffp->m_ofmt_ctx->streams[pkt->stream_index];
-	
-		// 转换PTS/DTS av_rescale_rnd(a,b,c) 以"时钟基c"表示的数值a转换成以"时钟基b"来表示。	
-		//av_rescale_q= This function is equivalent to av_rescale_q_rnd() with AV_ROUND_NEAR_INF.
+
+
+		// 转换PTS/DTS av_rescale_rnd(a,b,c) 以"时钟基c"表示的数值a转换成以"时钟基b"来表示。
+		av_packet_rescale_ts(&pkt, in_stream->time_base,out_stream->time_base);//导致异常
+		
+		//av_rescale_q= This function is equivalent to av_rescale_q_rnd() with AV_ROUND_NEAR_INF
+		/*.
 		pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
 		pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
 		pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
+		*/
 		pkt->pos = -1;
 
-		//pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base, out_stream->codec->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-		//pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base, out_stream->codec->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-		//pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->codec->time_base);
-		//pkt->pos = -1;
-		
 		// liuyi:max_ts 解决由于pts不递增，导致av_interleaved_write_frame -22的问题
 		if (pkt->pts<0) {
 			av_log(NULL, AV_LOG_ERROR, "liuyi ffp_record_file max_ts=%d,pts=%d", max_ts, pkt->pts);
@@ -578,12 +581,12 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 		}
 		else {
 			max_ts = pkt->pts>max_ts ? pkt->pts : max_ts;
-		}  
+		}
 		
 
 		// 写入一个AVPacket到输出文件
 		if ((ret = av_interleaved_write_frame(m_ofmt_ctx, pkt)) < 0) { // todo 出现负数导致写包错误
-			av_log(NULL, AV_LOG_ERROR, "liuyi----> faild: av_interleaved_write_frame ret=%d,errString",ret);	
+			av_log(NULL, AV_LOG_ERROR, "liuyi----> faild: av_interleaved_write_frame ret=%d,errString", ret);
 		}
 
 		av_packet_unref(pkt);
@@ -603,7 +606,7 @@ int ffp_stop_record(FFPlayer *ffp)
 	VideoState *is = ffp->is;
 	if (ffp->is_record) {
 		ffp->is_record = 0;
- 
+
 		if (ffp->m_ofmt_ctx != NULL) {
 			av_write_trailer(ffp->m_ofmt_ctx);
 			if (ffp->m_ofmt_ctx && !(ffp->m_ofmt_ctx->oformat->flags & AVFMT_NOFILE)) {
@@ -618,7 +621,7 @@ int ffp_stop_record(FFPlayer *ffp)
 	else {
 		av_log(ffp, AV_LOG_ERROR, "不需要写文件尾部\n");
 	}
-	
+
 	return 0;
 }
 
@@ -658,7 +661,7 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 	if (!stream_ctx) {
 		goto end;
 	}
-		
+
 
 	for (int i = 0; i < is->ic->nb_streams; i++) {
 		int ret;
@@ -678,7 +681,7 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 		}
 
 		//查找编码器、创建编码器上下文、设置编码器参数，然后打开编码器
-		encoder = avcodec_find_encoder(dec_ctx->codec_id); 
+		encoder = avcodec_find_encoder(dec_ctx->codec_id);
 		if (!encoder) {
 			av_log(NULL, AV_LOG_FATAL, "Necessary encoder not found\n");
 			goto end;
@@ -707,7 +710,7 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 				enc_ctx->pix_fmt = encoder->pix_fmts[0];
 			else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
 
-			enc_ctx->time_base = av_inv_q(dec_ctx->framerate);	
+			enc_ctx->time_base = av_inv_q(dec_ctx->framerate);
 		}
 		else {
 			enc_ctx->sample_rate = dec_ctx->sample_rate;
@@ -716,7 +719,7 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 			enc_ctx->sample_fmt = encoder->sample_fmts[0];
 			enc_ctx->time_base = (AVRational) { 1, enc_ctx->sample_rate };
 		}
-		
+
 		ret = avcodec_open2(enc_ctx, encoder, NULL);
 		if (ret < 0) {
 			av_log(NULL, AV_LOG_ERROR, "Cannot open video encoder for stream #%u\n", i);
@@ -760,14 +763,14 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 	ffp->is_first = 0;
 	ffp->record_error = 0;
 	ffp->is_record = 1;
-	
+
 	return 0;
 end:
 	ffp->record_error = 1;
 	return -1;
 }
 
-static int deep_copy_frame(AVFrame *dst,AVFrame *src)
+static int deep_copy_frame(AVFrame *dst, AVFrame *src)
 {
 	if (dst && src) {
 		dst->format = src->format;
@@ -789,7 +792,8 @@ static int deep_copy_frame(AVFrame *dst,AVFrame *src)
 		av_frame_copy(dst, src);
 		av_frame_copy_props(dst, src);
 		return 0;
-	}else {
+	}
+	else {
 		return -1;
 	}
 }
@@ -980,7 +984,7 @@ static void decoder_init(Decoder *d, AVCodecContext *avctx, PacketQueue *queue, 
 	d->pkt_serial = -1;
 }
 
-static int decoder_decode_frame(FFPlayer *ffp,Decoder *d, AVFrame *frame, AVSubtitle *sub) {
+static int decoder_decode_frame(FFPlayer *ffp, Decoder *d, AVFrame *frame, AVSubtitle *sub) {
 	int ret = AVERROR(EAGAIN);
 
 	for (;;) {
@@ -2164,11 +2168,11 @@ static int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double 
 }
 
 static int get_video_frame(FFPlayer *ffp, AVFrame *frame)
-{	
+{
 	int got_picture;
 	VideoState *is = ffp->is;
 
-	if ((got_picture = decoder_decode_frame(ffp,&is->viddec, frame, NULL)) < 0)
+	if ((got_picture = decoder_decode_frame(ffp, &is->viddec, frame, NULL)) < 0)
 		return -1;
 
 	if (got_picture) {
@@ -2446,7 +2450,7 @@ static int audio_thread(void *arg)
 		return AVERROR(ENOMEM);
 
 	do {
-		if ((got_frame = decoder_decode_frame(ffp,&is->auddec, frame, NULL)) < 0)
+		if ((got_frame = decoder_decode_frame(ffp, &is->auddec, frame, NULL)) < 0)
 			goto the_end;
 
 		if (got_frame) {
@@ -2577,7 +2581,7 @@ static int video_thread(void *arg)
 
 			continue;
 		}
-			
+
 
 #if CONFIG_AVFILTER
 		if (last_w != frame->width
@@ -2631,7 +2635,7 @@ static int video_thread(void *arg)
 			tb = av_buffersink_get_time_base(filt_out);
 #endif
 
-			
+
 			duration = (frame_rate.num && frame_rate.den ? av_q2d((AVRational) { frame_rate.den, frame_rate.num }) : 0);
 			pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
 
@@ -2679,7 +2683,7 @@ static int subtitle_thread(void *arg)
 		if (!(sp = frame_queue_peek_writable(&is->subpq)))
 			return 0;
 
-		if ((got_subtitle = decoder_decode_frame(ffp,&is->subdec, NULL, &sp->sub)) < 0)
+		if ((got_subtitle = decoder_decode_frame(ffp, &is->subdec, NULL, &sp->sub)) < 0)
 			break;
 
 		pts = 0;
@@ -3263,7 +3267,7 @@ static int read_thread(void *arg)
 		int orig_nb_streams = ic->nb_streams;
 
 		err = avformat_find_stream_info(ic, opts);
-		
+
 
 		for (i = 0; i < orig_nb_streams; i++)
 			av_dict_free(&opts[i]);
@@ -3377,7 +3381,7 @@ static int read_thread(void *arg)
 	if (infinite_buffer < 0 && is->realtime)
 		infinite_buffer = 1;
 
- 
+
 	ffp_start_record(ffp, "C:\\Data\\code\\ffplay\\ffplay\\record.mp4");
 	for (;;) {
 		if (is->abort_request)
@@ -3476,8 +3480,8 @@ static int read_thread(void *arg)
 			if ((ret == AVERROR_EOF || avio_feof(ic->pb)) && !is->eof) {
 				// liuyi add  
 				/*不在本read_thread里面进行flush编码器和写文件尾部;
-				  时为了防止与video_thread里面的写帧产生冲突，
-				  所以设置录像结束标志，统一在read_thread进行flush编码器和写文件尾部
+				时为了防止与video_thread里面的写帧产生冲突，
+				所以设置录像结束标志，统一在read_thread进行flush编码器和写文件尾部
 				*/
 				if (ffp->is_record == 1) {
 					ffp->is_record = -1;
@@ -3543,7 +3547,7 @@ fail:
 	return 0;
 }
 
-static VideoState *stream_open(FFPlayer *ffp,const char *filename, AVInputFormat *iformat)
+static VideoState *stream_open(FFPlayer *ffp, const char *filename, AVInputFormat *iformat)
 {
 	// FFPlayer *ffp = (FFPlayer*)malloc(sizeof(FFPlayer));
 	VideoState *is;
@@ -4066,53 +4070,53 @@ static int dummy;
 static const OptionDef options[] = {
 	//CMDUTILS_COMMON_OPTIONS
 #include "cmdutils_common_opts.h"
-{ "x", HAS_ARG,{ .func_arg = opt_width }, "force displayed width", "width" },
-{ "y", HAS_ARG,{ .func_arg = opt_height }, "force displayed height", "height" },
-{ "s", HAS_ARG | OPT_VIDEO,{ .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
-{ "fs", OPT_BOOL,{ &is_full_screen }, "force full screen" },
-{ "an", OPT_BOOL,{ &audio_disable }, "disable audio" },
-{ "vn", OPT_BOOL,{ &video_disable }, "disable video" },
-{ "sn", OPT_BOOL,{ &subtitle_disable }, "disable subtitling" },
-{ "ast", OPT_STRING | HAS_ARG | OPT_EXPERT,{ &wanted_stream_spec[AVMEDIA_TYPE_AUDIO] }, "select desired audio stream", "stream_specifier" },
-{ "vst", OPT_STRING | HAS_ARG | OPT_EXPERT,{ &wanted_stream_spec[AVMEDIA_TYPE_VIDEO] }, "select desired video stream", "stream_specifier" },
-{ "sst", OPT_STRING | HAS_ARG | OPT_EXPERT,{ &wanted_stream_spec[AVMEDIA_TYPE_SUBTITLE] }, "select desired subtitle stream", "stream_specifier" },
-{ "ss", HAS_ARG,{ .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
-{ "t", HAS_ARG,{ .func_arg = opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
-{ "bytes", OPT_INT | HAS_ARG,{ &seek_by_bytes }, "seek by bytes 0=off 1=on -1=auto", "val" },
-{ "nodisp", OPT_BOOL,{ &display_disable }, "disable graphical display" },
-{ "noborder", OPT_BOOL,{ &borderless }, "borderless window" },
-{ "volume", OPT_INT | HAS_ARG,{ &startup_volume }, "set startup volume 0=min 100=max", "volume" },
-{ "f", HAS_ARG,{ .func_arg = opt_format }, "force format", "fmt" },
-{ "pix_fmt", HAS_ARG | OPT_EXPERT | OPT_VIDEO,{ .func_arg = opt_frame_pix_fmt }, "set pixel format", "format" },
-{ "stats", OPT_BOOL | OPT_EXPERT,{ &show_status }, "show status", "" },
-{ "fast", OPT_BOOL | OPT_EXPERT,{ &fast }, "non spec compliant optimizations", "" },
-{ "genpts", OPT_BOOL | OPT_EXPERT,{ &genpts }, "generate pts", "" },
-{ "drp", OPT_INT | HAS_ARG | OPT_EXPERT,{ &decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", "" },
-{ "lowres", OPT_INT | HAS_ARG | OPT_EXPERT,{ &lowres }, "", "" },
-{ "sync", HAS_ARG | OPT_EXPERT,{ .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
-{ "autoexit", OPT_BOOL | OPT_EXPERT,{ &autoexit }, "exit at the end", "" },
-{ "exitonkeydown", OPT_BOOL | OPT_EXPERT,{ &exit_on_keydown }, "exit on key down", "" },
-{ "exitonmousedown", OPT_BOOL | OPT_EXPERT,{ &exit_on_mousedown }, "exit on mouse down", "" },
-{ "loop", OPT_INT | HAS_ARG | OPT_EXPERT,{ &loop }, "set number of times the playback shall be looped", "loop count" },
-{ "framedrop", OPT_BOOL | OPT_EXPERT,{ &framedrop }, "drop frames when cpu is too slow", "" },
-{ "infbuf", OPT_BOOL | OPT_EXPERT,{ &infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
-{ "window_title", OPT_STRING | HAS_ARG,{ &window_title }, "set window title", "window title" },
+	{ "x", HAS_ARG,{ .func_arg = opt_width }, "force displayed width", "width" },
+	{ "y", HAS_ARG,{ .func_arg = opt_height }, "force displayed height", "height" },
+	{ "s", HAS_ARG | OPT_VIDEO,{ .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
+	{ "fs", OPT_BOOL,{ &is_full_screen }, "force full screen" },
+	{ "an", OPT_BOOL,{ &audio_disable }, "disable audio" },
+	{ "vn", OPT_BOOL,{ &video_disable }, "disable video" },
+	{ "sn", OPT_BOOL,{ &subtitle_disable }, "disable subtitling" },
+	{ "ast", OPT_STRING | HAS_ARG | OPT_EXPERT,{ &wanted_stream_spec[AVMEDIA_TYPE_AUDIO] }, "select desired audio stream", "stream_specifier" },
+	{ "vst", OPT_STRING | HAS_ARG | OPT_EXPERT,{ &wanted_stream_spec[AVMEDIA_TYPE_VIDEO] }, "select desired video stream", "stream_specifier" },
+	{ "sst", OPT_STRING | HAS_ARG | OPT_EXPERT,{ &wanted_stream_spec[AVMEDIA_TYPE_SUBTITLE] }, "select desired subtitle stream", "stream_specifier" },
+	{ "ss", HAS_ARG,{ .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
+	{ "t", HAS_ARG,{ .func_arg = opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
+	{ "bytes", OPT_INT | HAS_ARG,{ &seek_by_bytes }, "seek by bytes 0=off 1=on -1=auto", "val" },
+	{ "nodisp", OPT_BOOL,{ &display_disable }, "disable graphical display" },
+	{ "noborder", OPT_BOOL,{ &borderless }, "borderless window" },
+	{ "volume", OPT_INT | HAS_ARG,{ &startup_volume }, "set startup volume 0=min 100=max", "volume" },
+	{ "f", HAS_ARG,{ .func_arg = opt_format }, "force format", "fmt" },
+	{ "pix_fmt", HAS_ARG | OPT_EXPERT | OPT_VIDEO,{ .func_arg = opt_frame_pix_fmt }, "set pixel format", "format" },
+	{ "stats", OPT_BOOL | OPT_EXPERT,{ &show_status }, "show status", "" },
+	{ "fast", OPT_BOOL | OPT_EXPERT,{ &fast }, "non spec compliant optimizations", "" },
+	{ "genpts", OPT_BOOL | OPT_EXPERT,{ &genpts }, "generate pts", "" },
+	{ "drp", OPT_INT | HAS_ARG | OPT_EXPERT,{ &decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", "" },
+	{ "lowres", OPT_INT | HAS_ARG | OPT_EXPERT,{ &lowres }, "", "" },
+	{ "sync", HAS_ARG | OPT_EXPERT,{ .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
+	{ "autoexit", OPT_BOOL | OPT_EXPERT,{ &autoexit }, "exit at the end", "" },
+	{ "exitonkeydown", OPT_BOOL | OPT_EXPERT,{ &exit_on_keydown }, "exit on key down", "" },
+	{ "exitonmousedown", OPT_BOOL | OPT_EXPERT,{ &exit_on_mousedown }, "exit on mouse down", "" },
+	{ "loop", OPT_INT | HAS_ARG | OPT_EXPERT,{ &loop }, "set number of times the playback shall be looped", "loop count" },
+	{ "framedrop", OPT_BOOL | OPT_EXPERT,{ &framedrop }, "drop frames when cpu is too slow", "" },
+	{ "infbuf", OPT_BOOL | OPT_EXPERT,{ &infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
+	{ "window_title", OPT_STRING | HAS_ARG,{ &window_title }, "set window title", "window title" },
 #if CONFIG_AVFILTER
-{ "vf", OPT_EXPERT | HAS_ARG,{ .func_arg = opt_add_vfilter }, "set video filters", "filter_graph" },
-{ "af", OPT_STRING | HAS_ARG,{ &afilters }, "set audio filters", "filter_graph" },
+	{ "vf", OPT_EXPERT | HAS_ARG,{ .func_arg = opt_add_vfilter }, "set video filters", "filter_graph" },
+	{ "af", OPT_STRING | HAS_ARG,{ &afilters }, "set audio filters", "filter_graph" },
 #endif
-{ "rdftspeed", OPT_INT | HAS_ARG | OPT_AUDIO | OPT_EXPERT,{ &rdftspeed }, "rdft speed", "msecs" },
-{ "showmode", HAS_ARG,{ .func_arg = opt_show_mode }, "select show mode (0 = video, 1 = waves, 2 = RDFT)", "mode" },
-{ "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT,{ .func_arg = opt_default }, "generic catch all option", "" },
-{ "i", OPT_BOOL,{ &dummy }, "read specified file", "input_file" },
-{ "codec", HAS_ARG,{ .func_arg = opt_codec }, "force decoder", "decoder_name" },
-{ "acodec", HAS_ARG | OPT_STRING | OPT_EXPERT,{ &audio_codec_name }, "force audio decoder",    "decoder_name" },
-{ "scodec", HAS_ARG | OPT_STRING | OPT_EXPERT,{ &subtitle_codec_name }, "force subtitle decoder", "decoder_name" },
-{ "vcodec", HAS_ARG | OPT_STRING | OPT_EXPERT,{ &video_codec_name }, "force video decoder",    "decoder_name" },
-{ "autorotate", OPT_BOOL,{ &autorotate }, "automatically rotate video", "" },
-{ "find_stream_info", OPT_BOOL | OPT_INPUT | OPT_EXPERT,{ &find_stream_info },
-"read and decode the streams to fill missing information with heuristics" },
-{ NULL, },
+	{ "rdftspeed", OPT_INT | HAS_ARG | OPT_AUDIO | OPT_EXPERT,{ &rdftspeed }, "rdft speed", "msecs" },
+	{ "showmode", HAS_ARG,{ .func_arg = opt_show_mode }, "select show mode (0 = video, 1 = waves, 2 = RDFT)", "mode" },
+	{ "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT,{ .func_arg = opt_default }, "generic catch all option", "" },
+	{ "i", OPT_BOOL,{ &dummy }, "read specified file", "input_file" },
+	{ "codec", HAS_ARG,{ .func_arg = opt_codec }, "force decoder", "decoder_name" },
+	{ "acodec", HAS_ARG | OPT_STRING | OPT_EXPERT,{ &audio_codec_name }, "force audio decoder",    "decoder_name" },
+	{ "scodec", HAS_ARG | OPT_STRING | OPT_EXPERT,{ &subtitle_codec_name }, "force subtitle decoder", "decoder_name" },
+	{ "vcodec", HAS_ARG | OPT_STRING | OPT_EXPERT,{ &video_codec_name }, "force video decoder",    "decoder_name" },
+	{ "autorotate", OPT_BOOL,{ &autorotate }, "automatically rotate video", "" },
+	{ "find_stream_info", OPT_BOOL | OPT_INPUT | OPT_EXPERT,{ &find_stream_info },
+	"read and decode the streams to fill missing information with heuristics" },
+	{ NULL, },
 };
 
 static void show_usage(void)
@@ -4192,7 +4196,7 @@ int main(int argc, char **argv) {
 	};
 	oldEntrence(8, &paras);
 	*/
-	
+
 
 	const char *paras[] = { "ffplay",
 		"-x",
@@ -4310,12 +4314,12 @@ int oldEntrence(int argc, char **argv)
 		}
 	}
 
-	FFPlayer *ffp = (FFPlayer*)malloc(sizeof(FFPlayer));	
+	FFPlayer *ffp = (FFPlayer*)malloc(sizeof(FFPlayer));
 	ffp->lastKeyFrame = av_frame_alloc();
 	ffp->lastKeyFrame->pict_type = AV_PICTURE_TYPE_NONE;
 	ffp->lastKeyFrame->key_frame = 0;
 
-	is = stream_open(ffp,input_filename, file_iformat);
+	is = stream_open(ffp, input_filename, file_iformat);
 	if (!is) {
 		av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
 		do_exit(NULL);
