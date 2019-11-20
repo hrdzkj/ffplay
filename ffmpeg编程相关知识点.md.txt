@@ -1,6 +1,6 @@
 ﻿2.ffmpeg编程，可以FFmpeg结构可以想思维导图一样引申出很多内容      
 2.1 VFomart库：提供了音视频容器格式的封装和解析以及所支持的协议文件格式和协议库。引申出ffmpeg常见结构体及关系。  
-2.2 AVCodec库：编解码库。引申出time_base,pts/dts  
+2.2 AVCodec库：编解码库。引申出time_base,pts/dts （pts来源于采集数据时就有，dts来源于编码器的。） https://blog.csdn.net/DONGHONGBAI/article/details/82775588   
 2.3 AVFilter库: 音视频滤镜库 如视频加水印、音频变声。引申出过滤器流程和API知识https://blog.csdn.net/qq_15893929/article/details/83009572    
 2.4 AVDevice库: 输入输出设备库，提供设备数据的输入与输出，如读取摄像头数据、屏幕录制。引申出硬件编解码的用法。  
 2.5 SwrRessample库: 音频重采样  

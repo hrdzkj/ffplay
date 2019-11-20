@@ -485,14 +485,6 @@ static void encode(FFPlayer *ffp, AVCodecContext *enc_ctx, AVFrame *frame)
 		if (ret >= 0) {
 			fprintf(stdout, " -----> encoding success!\n");
 			pkt.stream_index = stream_index;
-
-			/* prepare packet for muxing */
-			/*
-			av_packet_rescale_ts(&pkt,
-			enc_ctx->time_base,
-			ffp->m_ofmt_ctx->streams[stream_index]->time_base);
-			*/
-
 			ffp_record_file(ffp, &pkt);
 			av_packet_unref(&pkt);
 		}
@@ -542,8 +534,8 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 	av_new_packet(pkt, 0);
 	if (0 == av_packet_ref(pkt, packet)) {
 		//看好pts，dts是相对什么的
+		/*
 		if (ffp->is_first) { // 录制的第一帧，时间从0开始 
-			max_ts = 0;
 			ffp->start_pts = pkt->pts;
 			ffp->start_dts = pkt->dts;
 
@@ -555,24 +547,25 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 			pkt->pts = abs(pkt->pts - ffp->start_pts);
 			pkt->dts = abs(pkt->dts - ffp->start_dts);
 		}
-
+		*/
 
 		in_stream = is->ic->streams[pkt->stream_index];
 		out_stream = ffp->m_ofmt_ctx->streams[pkt->stream_index];
 
 
 		// 转换PTS/DTS av_rescale_rnd(a,b,c) 以"时钟基c"表示的数值a转换成以"时钟基b"来表示。
-		av_packet_rescale_ts(&pkt, in_stream->time_base,out_stream->time_base);//导致异常
-		
-		//av_rescale_q= This function is equivalent to av_rescale_q_rnd() with AV_ROUND_NEAR_INF
+		av_packet_rescale_ts(&pkt, out_stream->time_base,in_stream->time_base);//导致异常
+		pkt->pos = -1;
+
 		/*.
 		pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
 		pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
 		pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
-		*/
 		pkt->pos = -1;
-
+		*/
+		
 		// liuyi:max_ts 解决由于pts不递增，导致av_interleaved_write_frame -22的问题
+		/*
 		if (pkt->pts<0) {
 			av_log(NULL, AV_LOG_ERROR, "liuyi ffp_record_file max_ts=%d,pts=%d", max_ts, pkt->pts);
 			max_ts++;
@@ -582,7 +575,7 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 		else {
 			max_ts = pkt->pts>max_ts ? pkt->pts : max_ts;
 		}
-		
+		*/
 
 		// 写入一个AVPacket到输出文件
 		if ((ret = av_interleaved_write_frame(m_ofmt_ctx, pkt)) < 0) { // todo 出现负数导致写包错误
@@ -2577,11 +2570,10 @@ static int video_thread(void *arg)
 				int stream_index = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
 				encode(ffp, stream_ctx[stream_index].enc_ctx, NULL);
 			}
-			// liuyi add end
-
+			
 			continue;
 		}
-
+		
 
 #if CONFIG_AVFILTER
 		if (last_w != frame->width
@@ -3520,7 +3512,7 @@ static int read_thread(void *arg)
 			packet_queue_put(&is->audioq, pkt);
 		}
 		else if (pkt->stream_index == is->video_stream && pkt_in_play_range
-			&& !(is->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC)) {
+			&& !(is->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC)) {	
 			packet_queue_put(&is->videoq, pkt);
 		}
 		else if (pkt->stream_index == is->subtitle_stream && pkt_in_play_range) {
