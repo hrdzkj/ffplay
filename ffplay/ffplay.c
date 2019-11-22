@@ -3374,7 +3374,7 @@ static int read_thread(void *arg)
 		infinite_buffer = 1;
 
 
-	ffp_start_record(ffp, "C:\\Data\\code\\ffplay\\ffplay\\record.mp4");
+	ffp_start_record(ffp, "C:\\Data\\code\\ffplay\\out\\record.mp4");
 	for (;;) {
 		if (is->abort_request)
 			break;
@@ -4174,8 +4174,8 @@ static int lockmgr(void **mtx, enum AVLockOp op)
 	return 1;
 }
 
-// FFMPEG °æ±¾4.1.3
-int main(int argc, char **argv) {
+
+int mymain(int argc, char **argv) {
 	/*
 	const char *paras[] = {"ffplay",
 	"-x",
@@ -4189,7 +4189,7 @@ int main(int argc, char **argv) {
 	oldEntrence(8, &paras);
 	*/
 
-
+	/*
 	const char *paras[] = { "ffplay",
 		"-x",
 		"800",
@@ -4197,16 +4197,15 @@ int main(int argc, char **argv) {
 		"800",
 		"test.mp4",
 	};
-
-
 	oldEntrence(6, &paras);
+	*/
+	return 0;
 
-
-	//oldEntrence(argc,argv);
 }
+
+// FFMPEG °æ±¾4.1.3
 /* Called from the main */
-//int main(int argc, char **argv)
-int oldEntrence(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	int flags;
 	VideoState *is;
@@ -4320,6 +4319,6 @@ int oldEntrence(int argc, char **argv)
 	event_loop(ffp);
 
 	/* never returns */
-
+	system("PAUSE");
 	return 0;
 }

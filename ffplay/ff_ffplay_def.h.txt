@@ -1,12 +1,53 @@
-/* ffplayer */
-typedef struct FFPlayer {
-   // liuyi 新增录像用到字段
-    AVFormatContext *m_ofmt_ctx;        // 用于输出的AVFormatContext结构体
-    AVOutputFormat *m_ofmt;
-    pthread_mutex_t record_mutex;       // 锁
-    int is_record;                      // 是否在录制             
-    int record_error;    
-    int is_first;                       // 第一帧数据
-    int64_t start_pts;                  // 开始录制时pts
-    int64_t start_dts;                  // 开始录制时dts 
-}
+   private TextView mTextServiceProvider, mTextSource, mTextCallType, mTextFilterType;
+    EditText mEdtPhoneNum;
+    TextView mTextStartTime;
+    TextView mTextEndTime;
+        }		
+		
+cx_blacknumber	号码
+cx_filtering	过滤方式
+	（filteringList.code字段）
+cx_calltype	呼叫类型
+	（callTypeList.code字段）
+cx_operator	运营商
+	（serviceProviderList.code字段）
+cx_source	来源
+	（sourceList.code字段）
+cx_createtime_after	创建开始时间
+cx_createtime_before	创建截止时间
+
+
+    private static final int CODE_CallType = 0x01;
+    private static final int CODE_ServiceProvider=0x02;
+    private static final int CODE_Source=0x03;
+    private static final int CODE_FilterType=0x04;
+    private static final int CODE_StartTime=0x05;
+    private static final int CODE_EndTime=0x05;
+	
+	
+	    private void showServiceProviderPickView() {
+        String showKey = "name";
+        new DictionaryPicker.Builder(getContext()).setOptionList1(Dictionary.getServiceProviderList(), showKey).setOnSelectListener((item, options1) -> {
+            mServiceProvider = item;
+            mTextServiceProvider.setText(item.optString(showKey));
+        }).build().show();
+    }
+
+结束
+    private void showSource() {
+        String showKey = "name";
+        new DictionaryPicker.Builder(getContext()).setOptionList1(Dictionary.getSourceList(), showKey).setOnSelectListener((item, options1) -> {
+            mSource = item;
+            mTextSource.setText(item.optString(showKey));
+        }).build().show();
+    }
+
+
+    private void showFilterTypePickView() {
+        String showKey = "name";
+        new DictionaryPicker.Builder(getContext()).setOptionList1(Dictionary.getFilterList(), showKey).setOnSelectListener((item, options1) -> {
+            mFilterType = item;
+            mTextFilterType.setText(item.optString(showKey));
+        }).build().show();
+    }
+        }
