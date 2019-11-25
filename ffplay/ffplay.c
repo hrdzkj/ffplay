@@ -501,8 +501,8 @@ static void encode(FFPlayer *ffp, AVCodecContext *enc_ctx, AVFrame *frame)
 				break;
 			}
 			else {
-				fprintf(stderr, "Error encoding ret= %d,%s \n", ret, av_err2str(ret)); \
-					break;
+				fprintf(stderr, "Error encoding ret= %d,%s \n", ret, av_err2str(ret)); 
+				break;
 			}
 		}
 	}
@@ -522,7 +522,7 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 	AVStream *out_stream;
 	VideoState *is = ffp->is;
 	AVFormatContext *m_ofmt_ctx = ffp->m_ofmt_ctx;
-	//char errbuf[400];
+
 
 	if (packet == NULL) {
 		ffp->record_error = 1;
@@ -533,55 +533,18 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 	AVPacket *pkt = (AVPacket *)av_malloc(sizeof(AVPacket)); // 与看直播的 AVPacket分开，不然卡屏
 	av_new_packet(pkt, 0);
 	if (0 == av_packet_ref(pkt, packet)) {
-		//看好pts，dts是相对什么的
-		/*
-		if (ffp->is_first) { // 录制的第一帧，时间从0开始 
-			ffp->start_pts = pkt->pts;
-			ffp->start_dts = pkt->dts;
-
-			pkt->pts = 0;
-			pkt->dts = 0;
-			ffp->is_first = 1;
-		}
-		else { // 之后的每一帧都要减去，点击开始录制时的值，这样的时间才是正确的
-			pkt->pts = abs(pkt->pts - ffp->start_pts);
-			pkt->dts = abs(pkt->dts - ffp->start_dts);
-		}
-		*/
-
+		
 		in_stream = is->ic->streams[pkt->stream_index];
 		out_stream = ffp->m_ofmt_ctx->streams[pkt->stream_index];
 
-
 		// 转换PTS/DTS av_rescale_rnd(a,b,c) 以"时钟基c"表示的数值a转换成以"时钟基b"来表示。
-		av_packet_rescale_ts(&pkt, out_stream->time_base,in_stream->time_base);//导致异常
+		av_packet_rescale_ts(pkt, out_stream->time_base,in_stream->time_base);
 		pkt->pos = -1;
-
-		/*.
-		pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-		pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base, out_stream->time_base, (AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-		pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
-		pkt->pos = -1;
-		*/
-		
-		// liuyi:max_ts 解决由于pts不递增，导致av_interleaved_write_frame -22的问题
-		/*
-		if (pkt->pts<0) {
-			av_log(NULL, AV_LOG_ERROR, "liuyi ffp_record_file max_ts=%d,pts=%d", max_ts, pkt->pts);
-			max_ts++;
-			pkt->pts = max_ts;
-			pkt->dts = max_ts;
-		}
-		else {
-			max_ts = pkt->pts>max_ts ? pkt->pts : max_ts;
-		}
-		*/
 
 		// 写入一个AVPacket到输出文件
 		if ((ret = av_interleaved_write_frame(m_ofmt_ctx, pkt)) < 0) { // todo 出现负数导致写包错误
-			av_log(NULL, AV_LOG_ERROR, "liuyi----> faild: av_interleaved_write_frame ret=%d,errString", ret);
+			fprintf(stderr, "liuyi----> faild: av_interleaved_write_frame ret=%s,errString", av_err2str(ret));
 		}
-
 		av_packet_unref(pkt);
 	}
 	else {
@@ -609,10 +572,10 @@ int ffp_stop_record(FFPlayer *ffp)
 			ffp->m_ofmt_ctx = NULL;
 			ffp->is_first = 0;
 		}
-		av_log(NULL, AV_LOG_WARNING, "写文件尾部成功 ok\n");
+		fprintf(stdout, "写文件尾部成功 ok\n");
 	}
 	else {
-		av_log(ffp, AV_LOG_ERROR, "不需要写文件尾部\n");
+		fprintf(stdout, "不需要写文件尾部\n");
 	}
 
 	return 0;
@@ -2176,6 +2139,13 @@ static int get_video_frame(FFPlayer *ffp, AVFrame *frame)
 
 		frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(is->ic, is->video_st, frame);
 
+		// liuyi  code begin
+		int streamIndex = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
+		if (ffp->is_record == 1) { //在录像
+			encode(ffp, stream_ctx[streamIndex].enc_ctx, frame);//直接录制原始帧				
+		}
+		// liuyi code end
+
 		if (framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) {
 			if (frame->pts != AV_NOPTS_VALUE) {
 				double diff = dpts - get_master_clock(is);
@@ -2627,24 +2597,8 @@ static int video_thread(void *arg)
 			tb = av_buffersink_get_time_base(filt_out);
 #endif
 
-
 			duration = (frame_rate.num && frame_rate.den ? av_q2d((AVRational) { frame_rate.den, frame_rate.num }) : 0);
 			pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
-
-
-			// liuyi  code begin
-			int streamIndex = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
-			if (ffp->is_record == 1) { //在录像
-				encode(ffp, stream_ctx[streamIndex].enc_ctx, frame);//直接录制原始帧				
-			}
-
-			/* 证明了AVFrame的拷贝是正常的
-			AVFrame *copyFrame = deep_copy_frame(frame);
-			ret = queue_picture(is, copyFrame, pts, duration, copyFrame->pkt_pos, is->viddec.pkt_serial);
-			av_frame_unref(copyFrame);
-			av_frame_unref(frame);
-			*/
-			// liuyi code end
 
 			ret = queue_picture(is, frame, pts, duration, frame->pkt_pos, is->viddec.pkt_serial);
 			av_frame_unref(frame);
