@@ -471,9 +471,7 @@ static void encode(FFPlayer *ffp, AVCodecContext *enc_ctx, AVFrame *frame)
 	if (frame)
 		printf("Send frame %3"PRId64"\n", frame->pts);
 
-
-	//新的api
-	ret = avcodec_send_frame(enc_ctx, frame);//frame==null导致 bug 
+	ret = avcodec_send_frame(enc_ctx, frame); 
 	if (ret < 0) {
 		fprintf(stderr, "Error sending a frame for encoding %s \n", av_err2str(ret));
 		return -1;
@@ -648,25 +646,22 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 			goto end;
 		}
 
-		//不是帧率的问题，是I P B帧的区别导致的问题了
-		ret = avcodec_parameters_to_context(enc_ctx, in_stream->codecpar);
-		if (ret < 0) {
-			printf("Failed to copy context input to output stream codec context\n");
-			goto end;
-		}
+		
 		// 参考http://ffmpeg.org/doxygen/3.4/transcoding_8c-example.html
+		
+		AVDictionary *opts = NULL;
 		if (enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
 			enc_ctx->height = dec_ctx->height;
 			enc_ctx->width = dec_ctx->width;
 			enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
-			//enc_ctx->gop_size = 10;
-			//enc_ctx->max_b_frames = 0;
+			//enc_ctx->gop_size = dec_ctx->gop_size;
+			//enc_ctx->max_b_frames = dec_ctx->max_b_frames;
 
 			if (encoder->pix_fmts)
 				enc_ctx->pix_fmt = encoder->pix_fmts[0];
 			else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
 
-			enc_ctx->time_base = av_inv_q(dec_ctx->framerate);
+			enc_ctx->time_base =  av_inv_q(dec_ctx->framerate);	
 		}
 		else {
 			enc_ctx->sample_rate = dec_ctx->sample_rate;
@@ -676,21 +671,22 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 			enc_ctx->time_base = (AVRational) { 1, enc_ctx->sample_rate };
 		}
 
+		/* Some container formats (like MP4) require global headers to be present.
+		* Mark the encoder so that it behaves accordingly. */
+		if (ffp->m_ofmt_ctx->flags & AVFMT_GLOBALHEADER) {
+			enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+		}
+
 		ret = avcodec_open2(enc_ctx, encoder, NULL);
 		if (ret < 0) {
 			av_log(NULL, AV_LOG_ERROR, "Cannot open video encoder for stream #%u\n", i);
 			goto end;
 		}
 
-		ret = avcodec_copy_context(out_stream->codec, in_stream->codec);
-
-		if (ffp->m_ofmt_ctx->flags & AVFMT_GLOBALHEADER) {
-			enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-		}
-
+	     ret = avcodec_parameters_from_context(out_stream->codecpar, enc_ctx);
 		if (ret < 0) {
 			av_log(NULL, AV_LOG_ERROR, "Failed to copy encoder parameters to output stream #%u\n", i);
-			goto end;
+			return ret;
 		}
 
 		out_stream->time_base = enc_ctx->time_base;
