@@ -664,7 +664,7 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 			goto end;
 		}
 
-	     ret = avcodec_parameters_from_context(out_stream->codecpar, enc_ctx);
+	     ret = avcodec_parameters_from_context(out_stream->codecpar, dec_ctx);// enc_ctx 生产文件就不行
 		if (ret < 0) {
 			goto end;
 		}
