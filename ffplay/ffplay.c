@@ -584,39 +584,25 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 {
 	assert(ffp);
 	VideoState *is = ffp->is;
-	if (!file_name || !strlen(file_name)) { // 没有路径
-		av_log(ffp, AV_LOG_ERROR, "filename is invalid");
-		goto end;
-	}
-
-	if (!is || !is->ic || is->paused || is->abort_request) { // 没有上下文，或者上下文已经停止
-		av_log(ffp, AV_LOG_ERROR, "is,is->ic,is->paused is invalid");
-		goto end;
-	}
-
-	if (ffp->is_record) { // 已经在录制
-		av_log(ffp, AV_LOG_ERROR, "recording has started");
-		goto end;
-	}
-
+	// 没有路径
+	if (!file_name || !strlen(file_name)) goto end;
+	
+	// 没有上下文，或者上下文已经停止
+	if (!is || !is->ic || is->paused || is->abort_request) goto end;
+	
+	if (ffp->is_record) goto end;
+	
 	ffp->m_ofmt_ctx = NULL;
 	ffp->is_record = 0;
 	ffp->record_error = 0;
 
-	// todo avformat_new_stream，avcodec_copy_context/avcodec_parameters_from_context 等api函数的作用，初始化了什么东西
 	// 初始化一个用于输出的AVFormatContext结构体
 	avformat_alloc_output_context2(&ffp->m_ofmt_ctx, NULL, "mp4", file_name);
-	if (!ffp->m_ofmt_ctx) {
-		av_log(ffp, AV_LOG_ERROR, "Could not create output context filename is %s\n", file_name);
-		goto end;
-	}
+	if (!ffp->m_ofmt_ctx) goto end;
 
 	stream_ctx = av_mallocz_array(is->ic->nb_streams, sizeof(*stream_ctx));
-	if (!stream_ctx) {
-		goto end;
-	}
-
-
+	if (!stream_ctx) goto end;
+	
 	for (int i = 0; i < is->ic->nb_streams; i++) {
 		int ret;
 		AVCodec *encoder;
@@ -645,10 +631,8 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 			av_log(NULL, AV_LOG_FATAL, "Failed to allocate the encoder context\n");
 			goto end;
 		}
-
-		
+	
 		// 参考http://ffmpeg.org/doxygen/3.4/transcoding_8c-example.html
-		
 		AVDictionary *opts = NULL;
 		if (enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
 			enc_ctx->height = dec_ctx->height;
@@ -656,14 +640,12 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 			enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
 			//enc_ctx->gop_size = dec_ctx->gop_size;
 			//enc_ctx->max_b_frames = dec_ctx->max_b_frames;
-
 			if (encoder->pix_fmts)
 				enc_ctx->pix_fmt = encoder->pix_fmts[0];
 			else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
 
 			enc_ctx->time_base =  av_inv_q(dec_ctx->framerate);	
-		}
-		else {
+		}else {
 			enc_ctx->sample_rate = dec_ctx->sample_rate;
 			enc_ctx->channel_layout = dec_ctx->channel_layout;
 			enc_ctx->channels = av_get_channel_layout_nb_channels(enc_ctx->channel_layout);
@@ -679,21 +661,17 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 
 		ret = avcodec_open2(enc_ctx, encoder, NULL);
 		if (ret < 0) {
-			av_log(NULL, AV_LOG_ERROR, "Cannot open video encoder for stream #%u\n", i);
 			goto end;
 		}
 
 	     ret = avcodec_parameters_from_context(out_stream->codecpar, enc_ctx);
 		if (ret < 0) {
-			av_log(NULL, AV_LOG_ERROR, "Failed to copy encoder parameters to output stream #%u\n", i);
-			return ret;
+			goto end;
 		}
 
 		out_stream->time_base = enc_ctx->time_base;
 		stream_ctx[i].enc_ctx = enc_ctx;
 	}
-
-
 
 	av_dump_format(ffp->m_ofmt_ctx, 0, file_name, 1);
 
@@ -711,13 +689,13 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 		goto end;
 	}
 
-
 	ffp->is_first = 0;
 	ffp->record_error = 0;
 	ffp->is_record = 1;
 
 	return 0;
 end:
+	av_log(NULL, AV_LOG_ERROR, "Failed to call ffp_start_record \n");
 	ffp->record_error = 1;
 	return -1;
 }
