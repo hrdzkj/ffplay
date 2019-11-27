@@ -608,9 +608,6 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 		AVCodec *encoder;
 		AVCodecContext *enc_ctx;
 		AVCodecContext *dec_ctx = is->ic->streams[i]->codec;
-		if (dec_ctx->codec_type != AVMEDIA_TYPE_VIDEO && dec_ctx->codec_type != AVMEDIA_TYPE_AUDIO) {
-			continue;
-		}
 
 		//对照输入流创建输出流通道
 		AVStream *in_stream = is->ic->streams[i];
@@ -620,57 +617,71 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 			goto end;
 		}
 
-		//查找编码器、创建编码器上下文、设置编码器参数，然后打开编码器
-		encoder = avcodec_find_encoder(dec_ctx->codec_id);
-		if (!encoder) {
-			av_log(NULL, AV_LOG_FATAL, "Necessary encoder not found\n");
+		if (dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO || dec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
+			//查找编码器、创建编码器上下文、设置编码器参数，然后打开编码器	
+			encoder = avcodec_find_encoder(dec_ctx->codec_id);//不知道为什么导致属性里面少些信息
+		
+			if (!encoder) {
+				av_log(NULL, AV_LOG_FATAL, "Necessary encoder not found\n");
+				goto end;
+			}
+			enc_ctx = avcodec_alloc_context3(encoder);
+			if (!enc_ctx) {
+				av_log(NULL, AV_LOG_FATAL, "Failed to allocate the encoder context\n");
+				goto end;
+			}
+
+			if (enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
+		
+
+				enc_ctx->height = dec_ctx->height;
+				enc_ctx->width = dec_ctx->width;
+				enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
+				//enc_ctx->gop_size = dec_ctx->gop_size;
+				//enc_ctx->max_b_frames = dec_ctx->max_b_frames;
+				if (encoder->pix_fmts)
+					enc_ctx->pix_fmt = encoder->pix_fmts[0];
+				else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
+
+				enc_ctx->time_base = av_inv_q(dec_ctx->framerate);
+			}
+			else {
+				enc_ctx->sample_rate = dec_ctx->sample_rate;
+				enc_ctx->channel_layout = dec_ctx->channel_layout;
+				enc_ctx->channels = av_get_channel_layout_nb_channels(enc_ctx->channel_layout);
+				enc_ctx->sample_fmt = encoder->sample_fmts[0];
+				enc_ctx->time_base = (AVRational) { 1, enc_ctx->sample_rate };
+			}
+
+			ret = avcodec_open2(enc_ctx, encoder, NULL);
+			if (ret < 0) {
+				goto end;
+			}
+
+			ret = avcodec_parameters_from_context(out_stream->codecpar, enc_ctx);// enc_ctx 生产文件就不行
+			if (ret < 0) {
+				goto end;
+			}
+
+			/* Some container formats (like MP4) require global headers to be present.
+			* Mark the encoder so that it behaves accordingly. */
+			if (ffp->m_ofmt_ctx->flags & AVFMT_GLOBALHEADER) {
+				enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+			}
+
+			out_stream->time_base = enc_ctx->time_base;
+			stream_ctx[i].enc_ctx = enc_ctx;
+		}else if (dec_ctx->codec_type == AVMEDIA_TYPE_UNKNOWN) {
+			av_log(NULL, AV_LOG_FATAL, "Elementary stream #%d is of unknown type, cannot proceed\n", i);
 			goto end;
+		}else {/* if this stream must be remuxed */
+			ret = avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
+			if (ret < 0) {
+				av_log(NULL, AV_LOG_ERROR, "Copying parameters for stream #%u failed\n", i);
+				goto end;
+			}
+			out_stream->time_base = in_stream->time_base;
 		}
-		enc_ctx = avcodec_alloc_context3(encoder);
-		if (!enc_ctx) {
-			av_log(NULL, AV_LOG_FATAL, "Failed to allocate the encoder context\n");
-			goto end;
-		}
-	
-		// 参考http://ffmpeg.org/doxygen/3.4/transcoding_8c-example.html
-		AVDictionary *opts = NULL;
-		if (enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
-			enc_ctx->height = dec_ctx->height;
-			enc_ctx->width = dec_ctx->width;
-			enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
-			//enc_ctx->gop_size = dec_ctx->gop_size;
-			//enc_ctx->max_b_frames = dec_ctx->max_b_frames;
-			if (encoder->pix_fmts)
-				enc_ctx->pix_fmt = encoder->pix_fmts[0];
-			else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
-
-			enc_ctx->time_base =  av_inv_q(dec_ctx->framerate);	
-		}else {
-			enc_ctx->sample_rate = dec_ctx->sample_rate;
-			enc_ctx->channel_layout = dec_ctx->channel_layout;
-			enc_ctx->channels = av_get_channel_layout_nb_channels(enc_ctx->channel_layout);
-			enc_ctx->sample_fmt = encoder->sample_fmts[0];
-			enc_ctx->time_base = (AVRational) { 1, enc_ctx->sample_rate };
-		}
-
-		/* Some container formats (like MP4) require global headers to be present.
-		* Mark the encoder so that it behaves accordingly. */
-		if (ffp->m_ofmt_ctx->flags & AVFMT_GLOBALHEADER) {
-			enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-		}
-
-		ret = avcodec_open2(enc_ctx, encoder, NULL);
-		if (ret < 0) {
-			goto end;
-		}
-
-	     ret = avcodec_parameters_from_context(out_stream->codecpar, dec_ctx);// enc_ctx 生产文件就不行
-		if (ret < 0) {
-			goto end;
-		}
-
-		out_stream->time_base = enc_ctx->time_base;
-		stream_ctx[i].enc_ctx = enc_ctx;
 	}
 
 	av_dump_format(ffp->m_ofmt_ctx, 0, file_name, 1);
