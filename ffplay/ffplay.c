@@ -619,8 +619,12 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 
 		if (dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO || dec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
 			//查找编码器、创建编码器上下文、设置编码器参数，然后打开编码器	
-			encoder = avcodec_find_encoder(dec_ctx->codec_id);//不知道为什么导致属性里面少些信息
-		
+			//encoder = avcodec_find_encoder(dec_ctx->codec_id);//不知道为什么导致属性里面少些信息
+			if (dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO)
+               encoder = avcodec_find_encoder_by_name("libx264");		
+			else
+				encoder = avcodec_find_encoder(dec_ctx->codec_id);
+
 			if (!encoder) {
 				av_log(NULL, AV_LOG_FATAL, "Necessary encoder not found\n");
 				goto end;
@@ -637,13 +641,15 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 				enc_ctx->height = dec_ctx->height;
 				enc_ctx->width = dec_ctx->width;
 				enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
-				//enc_ctx->gop_size = dec_ctx->gop_size;
-				//enc_ctx->max_b_frames = dec_ctx->max_b_frames;
 				if (encoder->pix_fmts)
 					enc_ctx->pix_fmt = encoder->pix_fmts[0];
 				else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
-
 				enc_ctx->time_base = av_inv_q(dec_ctx->framerate);
+			
+
+				/* Some container formats (like MP4) require global headers to be present.
+				* Mark the encoder so that it behaves accordingly. */
+	
 			}
 			else {
 				enc_ctx->sample_rate = dec_ctx->sample_rate;
@@ -653,34 +659,24 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 				enc_ctx->time_base = (AVRational) { 1, enc_ctx->sample_rate };
 			}
 
+			if (ffp->m_ofmt_ctx->oformat->flags  & AVFMT_GLOBALHEADER)
+				enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
 			ret = avcodec_open2(enc_ctx, encoder, NULL);
 			if (ret < 0) {
 				goto end;
 			}
 
-			ret = avcodec_parameters_from_context(out_stream->codecpar, enc_ctx);// enc_ctx 生产文件就不行
+			ret = avcodec_parameters_from_context(out_stream->codecpar, enc_ctx);// dnc_ctx？enc_ctx 生产文件就不行
+			// ret = avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
 			if (ret < 0) {
 				goto end;
 			}
 
-			/* Some container formats (like MP4) require global headers to be present.
-			* Mark the encoder so that it behaves accordingly. */
-			if (ffp->m_ofmt_ctx->flags & AVFMT_GLOBALHEADER) {
-				enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-			}
+
 
 			out_stream->time_base = enc_ctx->time_base;
 			stream_ctx[i].enc_ctx = enc_ctx;
-		}else if (dec_ctx->codec_type == AVMEDIA_TYPE_UNKNOWN) {
-			av_log(NULL, AV_LOG_FATAL, "Elementary stream #%d is of unknown type, cannot proceed\n", i);
-			goto end;
-		}else {/* if this stream must be remuxed */
-			ret = avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
-			if (ret < 0) {
-				av_log(NULL, AV_LOG_ERROR, "Copying parameters for stream #%u failed\n", i);
-				goto end;
-			}
-			out_stream->time_base = in_stream->time_base;
 		}
 	}
 
