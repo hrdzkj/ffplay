@@ -589,10 +589,9 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 	
 	// 没有上下文，或者上下文已经停止
 	if (!is || !is->ic || is->paused || is->abort_request) goto end;
-	
 	if (ffp->is_record) goto end;
-	
-	ffp->m_ofmt_ctx = NULL;
+
+	ffp->m_ofmt_ctx = NULL;// c语言学习方法：直接在项目上进行调试学习
 	ffp->is_record = 0;
 	ffp->record_error = 0;
 
@@ -635,9 +634,7 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 				goto end;
 			}
 
-			if (enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
-		
-
+			if (enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {	
 				enc_ctx->height = dec_ctx->height;
 				enc_ctx->width = dec_ctx->width;
 				enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
@@ -645,10 +642,6 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 					enc_ctx->pix_fmt = encoder->pix_fmts[0];
 				else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
 				enc_ctx->time_base = av_inv_q(dec_ctx->framerate);
-			
-
-				/* Some container formats (like MP4) require global headers to be present.
-				* Mark the encoder so that it behaves accordingly. */
 	
 			}
 			else {
@@ -762,11 +755,10 @@ static int packet_queue_put_private(PacketQueue *q, AVPacket *pkt)
 
 	if (q->abort_request)
 		return -1;
-
 	pkt1 = av_malloc(sizeof(MyAVPacketList));
 	if (!pkt1)
 		return -1;
-	pkt1->pkt = *pkt;
+	pkt1->pkt = *pkt; //结构体直接赋值
 	pkt1->next = NULL;
 	if (pkt == &flush_pkt)
 		q->serial++;
@@ -784,18 +776,15 @@ static int packet_queue_put_private(PacketQueue *q, AVPacket *pkt)
 	SDL_CondSignal(q->cond);
 	return 0;
 }
-
 static int packet_queue_put(PacketQueue *q, AVPacket *pkt)
 {
 	int ret;
-
 	SDL_LockMutex(q->mutex);
 	ret = packet_queue_put_private(q, pkt);
 	SDL_UnlockMutex(q->mutex);
 
 	if (pkt != &flush_pkt && ret < 0)
-		av_packet_unref(pkt);
-
+		av_packet_unref(pkt);//放入失败，释放AVPacket
 	return ret;
 }
 
@@ -893,7 +882,7 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block, int *seria
 			q->nb_packets--;
 			q->size -= pkt1->pkt.size + sizeof(*pkt1);
 			q->duration -= pkt1->pkt.duration;
-			*pkt = pkt1->pkt;
+			*pkt = pkt1->pkt;// 结构体直接赋值
 			if (serial)
 				*serial = pkt1->serial;
 			av_free(pkt1);
@@ -1010,7 +999,7 @@ static int decoder_decode_frame(FFPlayer *ffp, Decoder *d, AVFrame *frame, AVSub
 					av_packet_move_ref(&d->pkt, &pkt);
 				}
 			}
-			av_packet_unref(&pkt);
+			av_packet_unref(&pkt);//因为线程拥有所属进程的地址空间,所以可以在解码线程对数据进行释放。
 		}
 	}
 }
