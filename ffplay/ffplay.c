@@ -515,7 +515,7 @@ static void encode(FFPlayer *ffp, AVCodecContext *enc_ctx, AVFrame *frame)
 int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 {
 	int ret = 0;
-	static int max_ts;
+	static int max_dts=0,max_pts=0;
 	AVStream *in_stream;
 	AVStream *out_stream;
 	VideoState *is = ffp->is;
@@ -531,17 +531,27 @@ int ffp_record_file(FFPlayer *ffp, AVPacket *packet)
 	AVPacket *pkt = (AVPacket *)av_malloc(sizeof(AVPacket)); // 与看直播的 AVPacket分开，不然卡屏
 	av_new_packet(pkt, 0);
 	if (0 == av_packet_ref(pkt, packet)) {
-		
+
 		in_stream = is->ic->streams[pkt->stream_index];
 		out_stream = ffp->m_ofmt_ctx->streams[pkt->stream_index];
 
 		// 转换PTS/DTS av_rescale_rnd(a,b,c) 以"时钟基c"表示的数值a转换成以"时钟基b"来表示。
 		av_packet_rescale_ts(pkt, out_stream->time_base,in_stream->time_base);
 		pkt->pos = -1;
+		
+		//满足编码器要求：实现dts递增，dts<pts
+		if (ffp->is_first) {
+			ffp->is_first = 1;
+			ffp->start_dts = (max_dts=pkt->dts);
+			ffp->start_pts = (max_pts=pkt-> pts);	
+		}else {
+			pkt->dts = (max_dts=(pkt->dts>max_dts?pkt->dts: max_dts+1));
+			pkt->pts = (max_pts = (pkt->pts>max_pts ? pkt->pts : max_pts + 1));
+		}
 
 		// 写入一个AVPacket到输出文件
 		if ((ret = av_interleaved_write_frame(m_ofmt_ctx, pkt)) < 0) { // todo 出现负数导致写包错误
-			fprintf(stderr, "liuyi----> faild: av_interleaved_write_frame ret=%s,errString", av_err2str(ret));
+			fprintf(stderr, "av_interleaved_write_frame ret=%s", av_err2str(ret));
 		}
 		av_packet_unref(pkt);
 	}
@@ -618,12 +628,7 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 
 		if (dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO || dec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
 			//查找编码器、创建编码器上下文、设置编码器参数，然后打开编码器	
-			//encoder = avcodec_find_encoder(dec_ctx->codec_id);//不知道为什么导致属性里面少些信息
-			if (dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO)
-               encoder = avcodec_find_encoder_by_name("libx264");		
-			else
-				encoder = avcodec_find_encoder(dec_ctx->codec_id);
-
+			encoder = avcodec_find_encoder(dec_ctx->codec_id);//不知道为什么导致属性里面少些信息
 			if (!encoder) {
 				av_log(NULL, AV_LOG_FATAL, "Necessary encoder not found\n");
 				goto end;
@@ -642,7 +647,10 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 					enc_ctx->pix_fmt = encoder->pix_fmts[0];
 				else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
 				enc_ctx->time_base = av_inv_q(dec_ctx->framerate);
-	
+
+				//enc_ctx->framerate = dec_ctx->framerate; 录像卡，可能是播放线程和录像线程在一起了有关
+				//enc_ctx->bit_rate = dec_ctx->bit_rate;
+
 			}
 			else {
 				enc_ctx->sample_rate = dec_ctx->sample_rate;
