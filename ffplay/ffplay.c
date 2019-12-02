@@ -60,7 +60,7 @@
 #include "libavcodec/avcodec.h"
 #include "libavutil/avutil.h"
 
-//#define CONFIG_AVFILTER 1
+#define CONFIG_AVFILTER 1
 
 #if CONFIG_AVFILTER
 # include "libavfilter/avfilter.h"
@@ -647,7 +647,7 @@ int ffp_start_record(FFPlayer *ffp, const char *file_name)
 					enc_ctx->pix_fmt = encoder->pix_fmts[0];
 				else enc_ctx->pix_fmt = dec_ctx->pix_fmt;
 				enc_ctx->time_base = av_inv_q(dec_ctx->framerate);
-
+				//enc_ctx->gop_size = 10;
 				//enc_ctx->framerate = dec_ctx->framerate; 录像卡，可能是播放线程和录像线程在一起了有关
 				//enc_ctx->bit_rate = dec_ctx->bit_rate;
 
@@ -4108,6 +4108,8 @@ static int lockmgr(void **mtx, enum AVLockOp op)
 
 
 int mymain(int argc, char **argv) {
+	// ffplay -x 800 -y 800 -vf drawtext="fontfile=arial.ttf: text='Test Text': x=100: y=300: fontsize=48: fontcolor=red: box=1: boxcolor=white" ./test.MP4
+
 	/*
 	const char *paras[] = {"ffplay",
 	"-x",
