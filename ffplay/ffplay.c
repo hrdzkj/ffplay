@@ -136,8 +136,8 @@ typedef struct PacketQueue {
 	int nb_packets;
 	int size;
 	int64_t duration;
-	int abort_request;
-	int serial;
+	int abort_request;//是否要中止队列操作，用于安全快速退出播放
+	int serial; ///序列号，和MyAVPacketList的serial作用相同，但改变的时序稍微有点不同
 	SDL_mutex *mutex;
 	SDL_cond *cond;
 } PacketQueue;
@@ -2117,13 +2117,6 @@ static int get_video_frame(FFPlayer *ffp, AVFrame *frame)
 
 		frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(is->ic, is->video_st, frame);
 
-		// liuyi  code begin
-		int streamIndex = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
-		if (ffp->is_record == 1) { //在录像
-			encode(ffp, stream_ctx[streamIndex].enc_ctx, frame);//直接录制原始帧				
-		}
-		// liuyi code end
-
 		if (framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) {
 			if (frame->pts != AV_NOPTS_VALUE) {
 				double diff = dpts - get_master_clock(is);
@@ -2513,12 +2506,13 @@ static int video_thread(void *arg)
 
 		if (!ret) {
 			// liuyi add begin
-			if (ffp->is_record == -1) {//还有很多可能是线程间引起的问题
+			if (ffp->is_record == -1) {//防止线程冲突引起的问题，-1表示read_thread读到文件尾
 				ffp->is_record = 2;//设置开始停止录像标志
 				int stream_index = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
 				encode(ffp, stream_ctx[stream_index].enc_ctx, NULL);
 			}
-			
+			// liuyi add end
+
 			continue;
 		}
 		
@@ -2574,9 +2568,16 @@ static int video_thread(void *arg)
 				is->frame_last_filter_delay = 0;
 			tb = av_buffersink_get_time_base(filt_out);
 #endif
+// filter结束
 
 			duration = (frame_rate.num && frame_rate.den ? av_q2d((AVRational) { frame_rate.den, frame_rate.num }) : 0);
 			pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
+
+			// liuyi  code begin
+			int streamIndex = getMediaTypeStreamIndex(ffp, AVMEDIA_TYPE_VIDEO);
+			if (ffp->is_record) //ffp->is_record非0，表示在录像
+				encode(ffp, stream_ctx[streamIndex].enc_ctx, frame);//直接录制原始帧				
+			// liuyi code end
 
 			ret = queue_picture(is, frame, pts, duration, frame->pkt_pos, is->viddec.pkt_serial);
 			av_frame_unref(frame);
@@ -4106,7 +4107,7 @@ static int lockmgr(void **mtx, enum AVLockOp op)
 	return 1;
 }
 
-
+// ffplay.c官方源码的地址是在 http://www.ffmpeg.org/doxygen/4.1/ffplay_8c_source.html
 int mymain(int argc, char **argv) {
 	// ffplay -x 800 -y 800 -vf drawtext="fontfile=arial.ttf: text='Test Text': x=100: y=300: fontsize=48: fontcolor=red: box=1: boxcolor=white" ./test.MP4
 
