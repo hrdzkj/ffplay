@@ -85,7 +85,7 @@ const int program_birth_year = 2003;
 #define EXTERNAL_CLOCK_MAX_FRAMES 10
 
 /* Minimum SDL audio buffer size, in samples. */
-#define SDL_AUDIO_MIN_BUFFER_SIZE 512
+#define SDL_AUDIO_MIN_BUFFER_SIZE 512 // 最小音频缓冲
 /* Calculate actual buffer size keeping in mind not cause too frequent audio callbacks */
 #define SDL_AUDIO_MAX_CALLBACKS_PER_SEC 30
 
@@ -93,13 +93,13 @@ const int program_birth_year = 2003;
 #define SDL_VOLUME_STEP (0.75)
 
 /* no AV sync correction is done if below the minimum AV sync threshold */
-#define AV_SYNC_THRESHOLD_MIN 0.04
+#define AV_SYNC_THRESHOLD_MIN 0.04    // 40ms
 /* AV sync correction is done if above the maximum AV sync threshold */
-#define AV_SYNC_THRESHOLD_MAX 0.1
+#define AV_SYNC_THRESHOLD_MAX 0.1     // 100ms
 /* If a frame duration is longer than this, it will not be duplicated to compensate AV sync */
 #define AV_SYNC_FRAMEDUP_THRESHOLD 0.1
 /* no AV correction is done if too big error */
-#define AV_NOSYNC_THRESHOLD 10.0
+#define AV_NOSYNC_THRESHOLD 10.0     // AV严重不同步时
 
 /* maximum audio speed change to get correct sync */
 #define SAMPLE_CORRECTION_PERCENT_MAX 10
@@ -161,6 +161,7 @@ typedef struct Clock {
 	double pts_drift;     /* clock base minus time at which we updated the clock */
 	double last_updated;
 	double speed;
+	//做暂停、拖动、变速播放的时候用到serial
 	int serial;           /* clock is based on a packet with this serial */
 	int paused;
 	int *queue_serial;    /* pointer to the current packet queue serial, used for obsolete clock detection */
@@ -232,6 +233,8 @@ typedef struct VideoState {
 	AVFormatContext *ic;
 	int realtime;
 
+	//因为ffplay的每个Clock都是独立，登记的是pts相对硬件时间的相对时间。
+	//ffplay支持动态切换音视频同步方式，所以需要3个时钟。
 	Clock audclk;
 	Clock vidclk;
 	Clock extclk;
@@ -246,9 +249,9 @@ typedef struct VideoState {
 
 	int audio_stream;
 
-	int av_sync_type;
+	int av_sync_type;//设置音视频同步方式,即：以那个时钟为基准进行同步。get_master_clock用到
 
-	double audio_clock;
+	double audio_clock; //是当前拿到的最新的audio sample的时间戳，在audio_decode_frame函数中计算的,当前音频帧的PTS+当前帧Duration
 	int audio_clock_serial;
 	double audio_diff_cum; /* used for AV difference average computation */
 	double audio_diff_avg_coef;
@@ -256,15 +259,17 @@ typedef struct VideoState {
 	int audio_diff_avg_count;
 	AVStream *audio_st;
 	PacketQueue audioq;
+	//audio_open()函数返回硬件音频缓冲大小赋值给了audio_hw_buf_size。注意SDL音频驱动播放音频采用“双buffer机制”
+	//两个buffer分别为A和B，A和B大小一致，audio_hw_buf_size是其中一个buffer的大小。
 	int audio_hw_buf_size;
 	uint8_t *audio_buf;
 	uint8_t *audio_buf1;
 	unsigned int audio_buf_size; /* in bytes */
 	unsigned int audio_buf1_size;
 	int audio_buf_index; /* in bytes */
-	int audio_write_buf_size;
-	int audio_volume;
-	int muted;
+	int audio_write_buf_size; // 音频写入缓冲大小
+	int audio_volume; // 音量
+	int muted; //是否静音
 	struct AudioParams audio_src;
 #if CONFIG_AVFILTER
 	struct AudioParams audio_filter_src;
@@ -293,7 +298,7 @@ typedef struct VideoState {
 	AVStream *subtitle_st;
 	PacketQueue subtitleq;
 
-	double frame_timer;
+	double frame_timer; // 直供video使用
 	double frame_last_returned_time;
 	double frame_last_filter_delay;
 	int video_stream;
@@ -369,6 +374,7 @@ static int find_stream_info = 1;
 
 /* current context */
 static int is_full_screen;
+// 音频回调时间audio_callback_time=av_gettime_relative();是以某个时间点(启动/1970等)算起的以微妙为单位的时间
 static int64_t audio_callback_time;
 
 static AVPacket flush_pkt;
@@ -788,14 +794,14 @@ static int packet_queue_put_private(PacketQueue *q, AVPacket *pkt)
 	if (!q->last_pkt)
 		q->first_pkt = pkt1;
 	else
-		q->last_pkt->next = pkt1;
-	q->last_pkt = pkt1;
-	q->nb_packets++;
-	q->size += pkt1->pkt.size + sizeof(*pkt1);
+		q->last_pkt->next = pkt1; //将新pkt放到PacketQueue链表的末尾
+	q->last_pkt = pkt1;// 更新链表尾巴
+	q->nb_packets++;// 链表packet个数加1
+	q->size += pkt1->pkt.size + sizeof(*pkt1);//更新链表size
 	q->duration += pkt1->pkt.duration;
 	/* XXX: should duplicate packet data in DV case */
 	// 条件信号
-	SDL_CondSignal(q->cond);
+	SDL_CondSignal(q->cond); //通知packet_queue_get()函数，链表中有新packet了。
 	return 0;
 }
 static int packet_queue_put(PacketQueue *q, AVPacket *pkt)
@@ -927,11 +933,11 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block, int *seria
 			ret = 1;
 			break;
 		}
-		else if (!block) {
+		else if (!block) { // packet queue链表是空的，非阻塞条件下，直接返回ret=0
 			ret = 0;
 			break;
 		}
-		else { // 等待
+		else { //packet queue链表是空的(阻塞条件下)，则等待read_thread读取packet
 			SDL_CondWait(q->cond, q->mutex);
 		}
 	}
@@ -1756,36 +1762,38 @@ static void video_display(VideoState *is)
 	SDL_RenderPresent(renderer);
 }
 
-/*
-get_clock(&is->vidclk):获取到的实际上是:最后一帧的pts 加上 从处理最后一帧开始到现在的时间,具体参考set_clock_at 和get_clock的代码
-c->pts_drift=最后一帧的pts-从处理最后一帧时间
-clock=c->pts_drift+现在的时候
-get_clock(&is->vidclk) ==is->vidclk.pts, av_gettime_relative() / 1000000.0 -is->vidclk.last_updated  +is->vidclk.pts
-*/
+
 static double get_clock(Clock *c)
 {
 	if (*c->queue_serial != c->serial)
 		return NAN;
-	if (c->paused) {
+	if (c->paused) { //如果当前是暂停状态，则返回最新的pts即可，因为暂停时时间没走
 		return c->pts;
 	}
 	else {
-		double time = av_gettime_relative() / 1000000.0;
+		double time = av_gettime_relative() / 1000000.0; //秒为单位
+		/*
+		time是硬件时钟，是不停的走的，是线性增长的。
+		正常播放的时候，c->speed可以看成是1，可以忽略(time - c->last_updated) * (1.0 - c->speed)，
+		所以 return c->pts_drift + time ，即是通过：相对时间+当前硬件时钟。
+		(time - c->last_updated) * (1.0 - c->speed) 外部时钟变速时有影响。
+		*/	
 		return c->pts_drift + time - (time - c->last_updated) * (1.0 - c->speed);
 	}
 }
 
 static void set_clock_at(Clock *c, double pts, int serial, double time)
 {
-	c->pts = pts;
-	c->last_updated = time;
-	c->pts_drift = c->pts - time;
+	c->pts = pts;// 当前帧的pts
+	c->last_updated = time;// 最后更新的时间，实际上是当前的一个系统时间
+	c->pts_drift = c->pts - time;// 当前帧pts和系统时间的差值，正常播放情况下两者的差值应该是比较固定的，因为两者都是以时间为基准进行线性增长
 	c->serial = serial;
 }
 
+//设置的都不是硬件时钟，而是记录pts相对硬件时钟的相对时间差(c->pts_drift=pts-time)
 static void set_clock(Clock *c, double pts, int serial)
 {
-	double time = av_gettime_relative() / 1000000.0;
+	double time = av_gettime_relative() / 1000000.0; //秒为单位
 	set_clock_at(c, pts, serial, time);
 }
 
@@ -2164,6 +2172,8 @@ static int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double 
 		av_get_picture_type_char(src_frame->pict_type), pts);
 #endif
 
+
+	// 探测video frame queue是否有空的Frame，如果有则返回空的Frame(vp)，接下来将src_frame中的视频内容拷贝到其中
 	if (!(vp = frame_queue_peek_writable(&is->pictq)))
 		return -1;
 
@@ -2843,7 +2853,7 @@ static int audio_decode_frame(VideoState *is)
 	// 同步音频并获取采样的大小
 	wanted_nb_samples = synchronize_audio(is, af->frame->nb_samples);
 
-	// 如果跟源音频的格式、声道格式、采样率、采样大小等不相同，则需要做重采样处理
+	// 如果跟源音频的格式、声道格式、采样率、采样大小等不相同，则需要做重采样处理。
 	if (af->frame->format != is->audio_src.fmt ||
 		dec_channel_layout != is->audio_src.channel_layout ||
 		af->frame->sample_rate != is->audio_src.freq ||
@@ -2937,7 +2947,20 @@ static int audio_decode_frame(VideoState *is)
 	return resampled_data_size;
 }
 
-//SDL音频驱动不断的调用sdl_audio_callback()来持续获取音频数据,sdl_audio_callback()中音频时钟的更新
+
+//注意opaque是前面的VideoState.
+//len的值表示一次发送多少。因为硬件(声卡)需要buffer有一段数据才会去工作
+//audio_buf_size：一直为样本缓冲区的大小，wanted_spec.samples.（一般每次解码这么多，文件不同，这个值不同)
+//audio_buf_index： 标记发送到哪里了。
+//这个函数的工作模式是:
+//1. 解码数据放到audio_buf, 大小放audio_buf_size。(audio_buf_size = audio_size;这句设置）
+//2. 调用一次callback只能发送len个字节,而每次取回的解码数据可能比len大，一次发不完。
+//3. 发不完的时候，会len == 0，不继续循环，退出函数，继续调用callback，进行下一次发送。
+//4. 由于上次没发完，这次不取数据，发上次的剩余的，audio_buf_size标记发送到哪里了。
+//5. 注意，callback每次一定要发且仅发len个数据，否则不会退出。
+//如果没发够，缓冲区又没有了，就再取。发够了，就退出，留给下一个发，以此循环。
+
+//SDL音频驱动不断的调用sdl_audio_callback来持续获取音频数据,sdl_audio_callback中音频时钟的更新
 /* prepare a new audio buffer */
 static void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
 {
@@ -2947,8 +2970,10 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
 	audio_callback_time = av_gettime_relative();//获取当前系统时间
 
 	while (len > 0) {// 往stream填充长度为len的数据，stream就是buffer A或者buffer B
-		if (is->audio_buf_index >= is->audio_buf_size) {//audio_buf中的数据已经全拷到stream中，需要拿新的audio_buf
-			audio_size = audio_decode_frame(is);//从audio sample queue中拿新的数据来播放
+		//数据全部发送，在取获取。is->audio_buf_index >= is->audio_buf_size，则audio_buf中的数据已经全拷到stream中，需要拿新的audio_buf。
+		if (is->audio_buf_index >= is->audio_buf_size) {
+			// audio_decode_frame将Audio Sample Queue中的解码后音频数据进行重采样处理，然后存储到is->audio_buf中。
+			audio_size = audio_decode_frame(is);
 			//  如果不存在音频帧，则输出静音
 			if (audio_size < 0) {
 				/* if error, just output silence */
@@ -2961,33 +2986,42 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
 					update_sample_display(is, (int16_t *)is->audio_buf, audio_size);
 				is->audio_buf_size = audio_size;
 			}
-			is->audio_buf_index = 0;
+			is->audio_buf_index = 0;  //回到缓冲区开头
 		}
+
+		//len的值表示一次回调能发送多少。
 		len1 = is->audio_buf_size - is->audio_buf_index;
-		if (len1 > len)
+		if (len1 > len) { //len1比len大，但是一次回调只能发len个。
 			len1 = len;
-		// 如果不处于静音模式并且声音最大
+		}
+		
 		if (!is->muted && is->audio_buf && is->audio_volume == SDL_MIX_MAXVOLUME)
+			// 如果不处于静音模式并且声音最大,将音频数据拷贝到stream中，供SDL进行播放使用
 			memcpy(stream, (uint8_t *)is->audio_buf + is->audio_buf_index, len1);
 		else {
 			memset(stream, 0, len1);
-			// 非静音、并且音量不是最大，则需要混音
-			if (!is->muted && is->audio_buf)
+			if (!is->muted && is->audio_buf) {
+				//非静音、并且音量不是最大，则需要混音， 第一个参数dst， 第二个是src
 				SDL_MixAudioFormat(stream, (uint8_t *)is->audio_buf + is->audio_buf_index, AUDIO_S16SYS, len1, is->audio_volume);
+			}
 		}
-		len -= len1; //更新is->audio_buf的未拷贝到stream中的数据（剩余数据）的长度
-		stream += len1;
+		len -= len1; //更新本次回调还能发多少个
+		stream += len1;//更新拷贝到的流的位置
 		is->audio_buf_index += len1;//更新is->audio_buf_index，指向audio_buf中未被拷贝到stream的数据（剩余数据）的起始位置
 	}
-	is->audio_write_buf_size = is->audio_buf_size - is->audio_buf_index;
+	is->audio_write_buf_size = is->audio_buf_size - is->audio_buf_index;//is->audio_write_buf_size 表示音频写入缓冲大小
+
+
 	/* Let's assume the audio driver that is used by SDL has two periods. */
 	if (!isnan(is->audio_clock)) {
+		// 更新音频时钟，更新时刻：每次往声卡缓冲区拷入数据
 		// 计算当前播放的音频的时间戳，这里的计算公式理解起来稍微费劲一些。
 		// is->audio_clock是当前拿到的最新的audio sample的时间戳，在audio_decode_frame函数中计算的。
-		// 此时，未播放的音频数据包括buffer A 和 buffer B中的数据加上is->audio_buf中的剩余数据
+		// 此时，未播放的音频数据包括buffer A 和 buffer B中的数据加上is->audio_buf中的剩余数据 （注意SDL音频驱动播放音频采用双缓冲机制）
 		// 所以当前播放的时间戳相对于is->audio_clock要落后(2 * is->audio_hw_buf_size + is->audio_write_buf_size) / is->audio_tgt.bytes_per_sec。
+		//公式：缓冲区内数据可以播放时长=缓冲区数据长度/每秒消耗数据量=缓冲区内数据可以播放时长=缓冲区数据长度/bytes_per_sec
 		set_clock_at(&is->audclk, is->audio_clock - (double)(2 * is->audio_hw_buf_size + is->audio_write_buf_size) / is->audio_tgt.bytes_per_sec, is->audio_clock_serial, audio_callback_time / 1000000.0);
-		sync_clock_to_slave(&is->extclk, &is->audclk);
+		sync_clock_to_slave(&is->extclk, &is->audclk);// 使用音频时钟更新外部时钟
 	}
 }
 
@@ -3022,9 +3056,10 @@ static int audio_open(void *opaque, int64_t wanted_channel_layout, int wanted_nb
 	
     /*
 	这里buffer A和B的大小是比较重要的参数：buffer太大或导致播放延迟（因为需要等到A填充满了之后才开始播放),
-	buffer太小或导致sdl_audio_callback()来不及往buffer中填充数据，导致部分音频被Skip的后果。
-	在ffplay中，设定一秒钟大概调用30次sdl_audio_callback()函数，应该很好的权衡了buffer大小的问题
+	buffer太小或导致sdl_audio_callback来不及往buffer中填充数据，导致部分音频被Skip的后果。
+	在ffplay中，设定一秒钟大概调用30次sdl_audio_callback函数，应该很好的权衡了buffer大小的问题
 	wanted_spec.samples指定了buffer A和B中的sample的数量，这里指定buffer A和B大概包含了1/30秒的samples
+	https://blog.csdn.net/lrzkd/article/details/78661841
 	*/
 	wanted_spec.samples = FFMAX(SDL_AUDIO_MIN_BUFFER_SIZE, 2 << av_log2(wanted_spec.freq / SDL_AUDIO_MAX_CALLBACKS_PER_SEC));
 	wanted_spec.callback = sdl_audio_callback;// 指定SDL音频驱动的回调函数
@@ -3379,7 +3414,8 @@ static int read_thread(void *arg)
 	if (show_status)
 		av_dump_format(ic, 0, is->filename, 0);
 
-	// 获取码流对应的索引
+
+	// 获取码流对应的索引 (二级指针streams[i]有意义，需要二级指针是指针数组的指针才有意义)
 	for (i = 0; i < ic->nb_streams; i++) {
 		AVStream *st = ic->streams[i];
 		enum AVMediaType type = st->codecpar->codec_type;
