@@ -1984,6 +1984,7 @@ static void update_video_pts(VideoState *is, double pts, int64_t pos, int serial
 	sync_clock_to_slave(&is->extclk, &is->vidclk);
 }
 
+
 /* called to display each frame */
 static void video_refresh(void *opaque, double *remaining_time)
 {
@@ -3835,12 +3836,26 @@ static void toggle_audio_display(VideoState *is)
 	}
 }
 
+/**
+* 显示视频
+* 循环检测并优先处理用户输入事件
+* 内置刷新率控制，约10ms刷新一次
+*/
 static void refresh_loop_wait_event(VideoState *is, SDL_Event *event) {
 	double remaining_time = 0.0; 
-	// 调用SDL_PeepEvents前先调用SDL_PumpEvents，将输入设备的事件抽到事件队列中
+	// 调用SDL_PeepEvents前先调用SDL_PumpEvents，将输入设备的事件抽到事件队列中,等待SDL_PeepEvents获取事件
 	SDL_PumpEvents();
+
+	/**
+	* SDL_PeepEvents
+	* 从事件队列中提取事件，从事件队列中拿一个事件，放到event中,由于这里使用的是SDL_GETEVENT, 所以获取事件时会从队列中移除
+	* 如果有事件发生，返回事件数量，则while循环不执行。
+	* 如果出错，返回负数的错误码，则while循环不执行。
+	* 如果当前没有事件发生，且没有出错，返回0，进入while循环。
+	* while循环!说明了只要事件队列有消息，优先执行队列中的事件，然后才进行视频的渲染
+	*/
 	while (!SDL_PeepEvents(event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) {
-		//从事件队列中拿一个事件，放到event中，如果没有事件，则进入循环中
+		/* 隐藏鼠标指针， CURSOR_HIDE_DELAY = 1s */
 		if (!cursor_hidden && av_gettime_relative() - cursor_last_shown > CURSOR_HIDE_DELAY) {
 			SDL_ShowCursor(0);//隐藏鼠标
 			cursor_hidden = 1;
@@ -3850,9 +3865,15 @@ static void refresh_loop_wait_event(VideoState *is, SDL_Event *event) {
 		// 在video_refresh函数中，根据当前帧显示时刻(display time)和实际时刻(actual time)计算需要sleep的时间，保证帧按时显示
 		if (remaining_time > 0.0) // 如果视频来的太早，则sleep一段时间之后再来显示
 			av_usleep((int64_t)(remaining_time * 1000000.0));
-		remaining_time = REFRESH_RATE;
+
+		/* 默认屏幕刷新率控制，REFRESH_RATE = 10ms */
+		remaining_time = REFRESH_RATE; 
+
+		/* 显示视频 */
 		if (is->show_mode != SHOW_MODE_NONE && (!is->paused || is->force_refresh))
 			video_refresh(is, &remaining_time); //remainning_time在video_refresh中计算。
+
+		//重新搜索输入设备的事件，如果屏蔽掉该函数的调用，将会导致键盘的输入无法进行事件队列，导致键盘输入无效，例如尝试按下q停止视频播放
 		SDL_PumpEvents();
 	}
 }
@@ -3884,6 +3905,10 @@ static void seek_chapter(VideoState *is, int incr)
 		AV_TIME_BASE_Q), 0, 0);
 }
 
+/*
+* event_loop: 一个for循环，可以当做主线程，里面处理各种消息，这个for循环退出后，整个ffplay结束.
+* 刷新的线程refresh_loop_wait_event也放在event_loop中
+*/
 /* handle an event sent by the GUI */
 static void event_loop(FFPlayer *ffp)
 {
@@ -4344,6 +4369,17 @@ int mymain(int argc, char **argv) {
 
 }
 
+
+/*
+* opengl,sdl甚至windows渲染，都是通过对应库函数中的void *使用ffmpeg的帧数据(AVFrame.data void*) （第三方库间的链接 都是通过* void吧）：
+* opengl绘制实际:把帧数据(void* AVFrame.data)转变(glTexSubImage2D)为一张纹理,然后不听得更像纹理，从而实现视频帧的绘制
+*
+* event_loop：事件处理，event_loop->refresh_loop_wait_event-> video_refresh,通过这个顺序进行视频的display
+* SDL video输出是通过调用video_refresh-> video_display-> video_image_display-> SDL_DisplayYUVOverlay来实现的
+* SDL Audio是通过SDL回调sdl_audio_callback（该接口在打开音频时注册给SDL）来实现的
+*
+* 守护进程是利用socket的read阻塞机制(也没能100%，守护的是Service)
+*/
 // FFMPEG 版本4.1.3
 /* Called from the main */
 int main(int argc, char **argv)

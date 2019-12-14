@@ -4,19 +4,19 @@
     <ShowAllFiles>false</ShowAllFiles>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LocalDebuggerCommandArguments>"-x" "800" "-y" "800" "../out/test.mp4"</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>"-x" "800" "-y" "800" "-vf" "drawtext=fontfile=arial.ttf:fontsize=40:text='hello world':x=100:y=100" "../out/testmy.MP4"</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LocalDebuggerCommandArguments>"-x" "800" "-y" "800" "../out/test.mp4"</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>"-x" "800" "-y" "800" "-vf" "drawtext=fontfile=arial.ttf:fontsize=40:text='hello world':x=100:y=100" "../out/testmy.MP4"</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>"-x" "800" "-y" "800" "../out/test.mp4"</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>"-x" "800" "-y" "800" "-vf" "drawtext=fontfile=arial.ttf:fontsize=40:text='hello world':x=100:y=100" "../out/testmy.MP4"</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>"-x" "800" "-y" "800" "../out/test.mp4"</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>"-x" "800" "-y" "800" "-vf" "drawtext=fontfile=arial.ttf:fontsize=40:text='hello world':x=100:y=100" "../out/testmy.MP4"</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
