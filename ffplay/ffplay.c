@@ -2009,10 +2009,11 @@ static void video_refresh(void *opaque, double *remaining_time)
 		*remaining_time = FFMIN(*remaining_time, is->last_vis_time + rdftspeed - time);
 	}
 
-	// 视频码流
+
+	// 视频码流  以音频为基准的同步原理：视频慢了加快或者丢帧；快了则放慢播放
 	if (is->video_st) {
 	retry:
-		if (frame_queue_nb_remaining(&is->pictq) == 0) {
+		if (frame_queue_nb_remaining(&is->pictq) == 0) { //返回队列中待显示帧的数目
 			// nothing to do, no picture to display in the queue
 		}
 		else {
@@ -2020,15 +2021,15 @@ static void video_refresh(void *opaque, double *remaining_time)
 			Frame *vp, *lastvp;
 
 			/* dequeue the picture */
-			lastvp = frame_queue_peek_last(&is->pictq);//取Video Frame Queue上一帧图像
-			vp = frame_queue_peek(&is->pictq);//取Video Frame Queue当前帧图像
+			lastvp = frame_queue_peek_last(&is->pictq);//取Video Frame Queue上一帧图像,即：当前播放器显示的帧
+			vp = frame_queue_peek(&is->pictq);//取Video Frame Queue当前帧图像，即：获取待显示的第一个帧
 
 			if (vp->serial != is->videoq.serial) {
-				frame_queue_next(&is->pictq);
+				frame_queue_next(&is->pictq);//获取待显示的第二个帧 ，读指针+1,读指针从lastvp更新到vp
 				goto retry;
 			}
 
-			//lastvp->serial != vp->serial 说明SEEK过,重新调整frame_timer  
+			//lastvp->serial != vp->serial 说明SEEK过,重新调整frame_timer, 将frame_timer更新为当前时间
 			if (lastvp->serial != vp->serial)
 				is->frame_timer = av_gettime_relative() / 1000000.0;
 
@@ -2050,13 +2051,15 @@ static void video_refresh(void *opaque, double *remaining_time)
 				goto display;
 			}
 
+			// 更新帧计时器
 			is->frame_timer += delay;
-			if (delay > 0 && time - is->frame_timer > AV_SYNC_THRESHOLD_MAX)
+			if (delay > 0 && time - is->frame_timer > AV_SYNC_THRESHOLD_MAX) //帧计时器落后当前时间超过了阈值，则用当前的时间作为帧计时器时间
 				is->frame_timer = time;
 
+			// 更新视频时钟的pts
 			SDL_LockMutex(is->pictq.mutex);
 			if (!isnan(vp->pts))
-				update_video_pts(is, vp->pts, vp->pos, vp->serial);
+				update_video_pts(is, vp->pts, vp->pos, vp->serial);// 更新视频时钟：时间戳、时钟时间
 			SDL_UnlockMutex(is->pictq.mutex);
 
 			// 判断是否还有剩余的帧
@@ -2065,7 +2068,8 @@ static void video_refresh(void *opaque, double *remaining_time)
 				duration = vp_duration(is, vp, nextvp);
 				/*如果延迟时间超过一帧，并且允许丢帧，则进行丢帧处理*/
 				// 如果当前帧显示时刻早于实际时刻，说明解码慢了，帧到的晚了，需要丢弃不能用于显示了，不然音视频不同步了。
-				if (!is->step && (framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) && time > is->frame_timer + duration) {
+				if (!is->step && (framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) 
+					&& time > is->frame_timer + duration) {
 					/*丢掉延迟的帧，取下一帧*/
 					is->frame_drops_late++;
 					frame_queue_next(&is->pictq);
@@ -2073,7 +2077,7 @@ static void video_refresh(void *opaque, double *remaining_time)
 				}
 			}
 
-			// 如果存在字幕
+			// 如果存在字幕 (应该也类似视频的处理）
 			if (is->subtitle_st) {
 				// 如果字幕还存在剩余帧，则获取剩余帧
 				while (frame_queue_nb_remaining(&is->subpq) > 0) {
@@ -2120,7 +2124,7 @@ static void video_refresh(void *opaque, double *remaining_time)
 	display:
 		/* display picture */
 		if (!display_disable && is->force_refresh && is->show_mode == SHOW_MODE_VIDEO && is->pictq.rindex_shown)
-			video_display(is);
+			video_display(is);//取出is->pictq读指针指向的帧进行显示
 	}
 	is->force_refresh = 0;
 	if (show_status) {
