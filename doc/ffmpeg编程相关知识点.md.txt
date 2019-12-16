@@ -13,5 +13,8 @@
 4.ffmpeg相关API  
 4.1AVPacket数据域空间的创建与管理(在数据域的空间实在av_read_frame内分配的，    
 av_packet_alloc/av_packet_free管理AVPacket的空间，av_packet_ref/av_packet_unref通过引用计数对数据域内存空间管理)  
-4.2 结合ffmpeg的库思维导出的功能（打开文件，关闭文件，滤镜，编解码等)的形象理解后，才能记熟悉流程。  
+4.2 结合ffmpeg的库思维导出的功能（打开文件，关闭文件，滤镜，编解码等)的形象理解后，才能记熟悉流程。
+
+5.音视频同步的流程图  
+https://www.cnblogs.com/leisure_chn/p/10307089.html  有比较好的讲解。
  

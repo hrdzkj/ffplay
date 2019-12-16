@@ -1965,6 +1965,7 @@ static double compute_target_delay(double delay, VideoState *is)
 	return delay;
 }
 
+//计算两帧之间的间隔（因为可能不是连续的两帧，所以不能直接用nextvp->duration）
 static double vp_duration(VideoState *is, Frame *vp, Frame *nextvp) {
 	if (vp->serial == nextvp->serial) {
 		double duration = nextvp->pts - vp->pts;
@@ -2014,9 +2015,9 @@ static void video_refresh(void *opaque, double *remaining_time)
 	if (is->video_st) {
 	retry:
 		if (frame_queue_nb_remaining(&is->pictq) == 0) { //返回队列中待显示帧的数目
-			// nothing to do, no picture to display in the queue
+			// nothing to do, no picture to display in the queue  // 所有帧已显示
 		}
-		else {
+		else {  // 有未显示帧
 			double last_duration, duration, delay;
 			Frame *vp, *lastvp;
 
@@ -2038,7 +2039,7 @@ static void video_refresh(void *opaque, double *remaining_time)
 				goto display;
 
 			/* compute nominal last_duration */
-			last_duration = vp_duration(is, lastvp, vp);//计算两帧之间的时间间隔
+			last_duration = vp_duration(is, lastvp, vp);//计算两帧之间的时间间隔,lastvp理想播放时长
 			delay = compute_target_delay(last_duration, is); //计算当前帧与上一帧渲染的时间差
 
 			time = av_gettime_relative() / 1000000.0;
@@ -2050,8 +2051,10 @@ static void video_refresh(void *opaque, double *remaining_time)
 				*remaining_time = FFMIN(is->frame_timer + delay - time, *remaining_time);
 				goto display;
 			}
+            //下面就是已经time >= is->frame_timer + delay,已经到或者超过了下一帧的渲染时刻了。
 
-			// 更新帧计时器
+
+			// 更新当初帧的frame_timer
 			is->frame_timer += delay;
 			if (delay > 0 && time - is->frame_timer > AV_SYNC_THRESHOLD_MAX) //帧计时器落后当前时间超过了阈值，则用当前的时间作为帧计时器时间
 				is->frame_timer = time;
@@ -2064,10 +2067,9 @@ static void video_refresh(void *opaque, double *remaining_time)
 
 			// 判断是否还有剩余的帧
 			if (frame_queue_nb_remaining(&is->pictq) > 1) {
-				Frame *nextvp = frame_queue_peek_next(&is->pictq);// 取得下一帧
-				duration = vp_duration(is, vp, nextvp);
-				/*如果延迟时间超过一帧，并且允许丢帧，则进行丢帧处理*/
-				// 如果当前帧显示时刻早于实际时刻，说明解码慢了，帧到的晚了，需要丢弃不能用于显示了，不然音视频不同步了。
+				Frame *nextvp = frame_queue_peek_next(&is->pictq);// 取得待显示帧的下一帧
+				duration = vp_duration(is, vp, nextvp);//当前待显示帧vp的播放时长 = nextvp->pts - vp->pts	
+				// 1. 非步进模式；2. 丢帧策略生效；3. 当前待显示帧vp播放时刻已过（time>is->frame_timer+duration)
 				if (!is->step && (framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) 
 					&& time > is->frame_timer + duration) {
 					/*丢掉延迟的帧，取下一帧*/
@@ -2115,6 +2117,7 @@ static void video_refresh(void *opaque, double *remaining_time)
 				}
 			}
 
+			// 删除当前读指针元素（当前显示帧），读指针+1。若未丢帧，读指针从lastvp更新到vp；若有丢帧，读指针从vp更新到nextvp
 			frame_queue_next(&is->pictq);
 			is->force_refresh = 1; //显示当前帧
 
