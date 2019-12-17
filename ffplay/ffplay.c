@@ -4346,6 +4346,11 @@ static int lockmgr(void **mtx, enum AVLockOp op)
 }
 
 // ffplay.c官方源码的地址是在 http://www.ffmpeg.org/doxygen/4.1/ffplay_8c_source.html
+// vlc qt版本官方源码：https://vlc-qt.tano.si/  
+// 毕业设计 https://blog.csdn.net/u012952807/article/details/51659446
+// 雷神的实现：https://blog.csdn.net/leixiaohua1020/article/details/42363079
+// 基于vlc开发一个能播放视频的播放器相对比较容易，但是定制化一些开发(渲染、截图、拍照)，就需要对VLC的api比较熟悉了。
+// 开发方式应该是QT+VLC_SDK; VLC_SDK编译提供新接口实现定制化功能。
 int mymain(int argc, char **argv) {
 	// ffplay -x 800 -y 800 -vf drawtext="fontfile=arial.ttf: text='Test Text': x=100: y=300: fontsize=48: fontcolor=red: box=1: boxcolor=white" ./test.MP4
 
